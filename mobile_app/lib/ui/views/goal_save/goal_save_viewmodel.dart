@@ -66,15 +66,10 @@ class GoalSaveViewModel extends BaseViewModel {
   // Load goal save balance from contract
   Future<void> loadGoalSaveBalance() async {
     try {
-      final goals = await _contractService.getUserGoalSaves();
-      _goalSaveBalance = goals.fold(0.0, (sum, goal) {
-        final currentAmount = goal['current_amount'] as BigInt?;
-        if (currentAmount != null) {
-          return sum +
-              (currentAmount.toDouble() / 1000000.0); // Convert from USDC units
-        }
-        return sum;
-      });
+      // Get the actual user goal save balance from contract
+      final balanceBigInt = await _contractService.getUserGoalSaveBalance();
+      // Convert from raw USDC units (6 decimals) to readable format
+      _goalSaveBalance = balanceBigInt.toDouble() / 1000000.0;
       notifyListeners();
     } catch (e) {
       print('Error loading goal save balance: $e');
@@ -85,50 +80,26 @@ class GoalSaveViewModel extends BaseViewModel {
   // Load user goals from contract
   Future<void> loadUserGoals() async {
     try {
-      final goals = await _contractService.getUserGoalSaves();
-
-      // Convert contract data to UI format
-      final formattedGoals = goals.map((goal) {
-        final targetAmount =
-            (goal['target_amount'] as BigInt).toDouble() / 1000000.0;
-        final currentAmount =
-            (goal['current_amount'] as BigInt).toDouble() / 1000000.0;
-        final contributionAmount =
-            (goal['contribution_amount'] as BigInt).toDouble() / 1000000.0;
-        final startTime = DateTime.fromMillisecondsSinceEpoch(
-            (goal['start_time'] as int) * 1000);
-        final endTime = DateTime.fromMillisecondsSinceEpoch(
-            (goal['end_time'] as int) * 1000);
-        final isCompleted = goal['is_completed'] as bool;
-
-        return {
-          'id': goal['id'].toString(),
-          'title': goal['title'] as String,
-          'category': goal['category'] as String,
-          'targetAmount': targetAmount,
-          'currentAmount': currentAmount,
-          'contributionAmount': contributionAmount,
-          'contributionType':
-              _getContributionTypeString(goal['contribution_type'] as int),
-          'startDate': startTime,
-          'endDate': endTime,
-          'progress':
-              targetAmount > 0 ? (currentAmount / targetAmount) * 100 : 0.0,
-          'isCompleted': isCompleted,
-          'status': isCompleted ? 'completed' : 'active',
-        };
-      }).toList();
-
-      _liveGoals =
-          formattedGoals.where((goal) => goal['status'] == 'active').toList();
-      _completedGoals = formattedGoals
-          .where((goal) => goal['status'] == 'completed')
-          .toList();
+      setBusy(true);
+      print('🔍 Loading user goal saves from contract...');
+      
+      // Get all user goal saves from contract
+      final allGoalSaves = await _contractService.getUserGoalSaves();
+      
+      // Separate live and completed goals
+      _liveGoals = allGoalSaves.where((goal) => !goal['isCompleted']).toList();
+      _completedGoals = allGoalSaves.where((goal) => goal['isCompleted']).toList();
+      
+      print('✅ Loaded ${_liveGoals.length} live goals and ${_completedGoals.length} completed goals');
+      
       notifyListeners();
     } catch (e) {
-      print('Error loading user goals: $e');
+      print('❌ Error loading user goal saves: $e');
+      // Keep empty lists on error
       _liveGoals = [];
       _completedGoals = [];
+    } finally {
+      setBusy(false);
     }
   }
 

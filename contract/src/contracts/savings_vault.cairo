@@ -712,6 +712,10 @@ pub mod SavingsVault {
             // Transfer penalty to platform
             usdc.transfer(self.ownable.owner(), penalty_fee);
 
+            // Refund net amount to creator (simplified - in production, would distribute to all members)
+            // TODO: Implement proper member contribution tracking for proportional refunds
+            usdc.transfer(caller, net_refund);
+
             self.emit(GroupSaveBroken { group_id, creator: caller, refunded_amounts: net_refund });
         }
 
@@ -781,9 +785,7 @@ pub mod SavingsVault {
                 }
 
                 let goal_save = self.goal_saves.entry(i).read();
-                if goal_save.user == user
-                    && !goal_save.is_completed
-                    && goal_save.current_amount > 0 {
+                if goal_save.user == user && !goal_save.is_completed {
                     live_goals.append(goal_save);
                 }
 

@@ -1232,7 +1232,10 @@ class ContractService {
   String _feltToString(BigInt feltValue) {
     if (feltValue == BigInt.zero) return '';
 
+    print('🔍 Converting felt252 to string: $feltValue (hex: 0x${feltValue.toRadixString(16)})');
+
     try {
+      // Method 1: Extract bytes and convert to ASCII/UTF-8
       final bytes = <int>[];
       var value = feltValue;
 
@@ -1244,22 +1247,68 @@ class ContractService {
         value = value >> 8;
       }
 
-      if (bytes.isEmpty) return '';
+      print('📝 Extracted bytes: $bytes');
 
-      final chars = bytes.where((byte) => byte >= 32 && byte <= 126).toList();
-      if (chars.isEmpty) return '';
+      if (bytes.isNotEmpty) {
+        // Try ASCII first (printable characters)
+        final asciiChars = bytes.where((byte) => byte >= 32 && byte <= 126).toList();
+        if (asciiChars.length == bytes.length) {
+          final asciiResult = String.fromCharCodes(asciiChars);
+          print('✅ ASCII conversion successful: "$asciiResult"');
+          return asciiResult;
+        }
 
-      return String.fromCharCodes(chars);
+        // Try UTF-8 conversion
+        try {
+          final utf8Result = String.fromCharCodes(bytes);
+          if (utf8Result.isNotEmpty && !utf8Result.contains('\u{FFFD}')) {
+            print('✅ UTF-8 conversion successful: "$utf8Result"');
+            return utf8Result;
+          }
+        } catch (e) {
+          print('⚠️ UTF-8 conversion failed: $e');
+        }
+      }
+
+      // Method 2: Try direct character conversion for small values
+      if (feltValue <= BigInt.from(1114111)) {
+        try {
+          final charResult = String.fromCharCode(feltValue.toInt());
+          if (charResult.isNotEmpty && charResult.codeUnitAt(0) >= 32) {
+            print('✅ Direct char conversion successful: "$charResult"');
+            return charResult;
+          }
+        } catch (e) {
+          print('⚠️ Direct char conversion failed: $e');
+        }
+      }
+
+      // Method 3: Try hex string interpretation
+      final hexString = feltValue.toRadixString(16);
+      if (hexString.length % 2 == 0) {
+        try {
+          final hexBytes = <int>[];
+          for (int i = 0; i < hexString.length; i += 2) {
+            final hexByte = int.parse(hexString.substring(i, i + 2), radix: 16);
+            if (hexByte >= 32 && hexByte <= 126) {
+              hexBytes.add(hexByte);
+            }
+          }
+          if (hexBytes.isNotEmpty) {
+            final hexResult = String.fromCharCodes(hexBytes);
+            print('✅ Hex string conversion successful: "$hexResult"');
+            return hexResult;
+          }
+        } catch (e) {
+          print('⚠️ Hex string conversion failed: $e');
+        }
+      }
+
+      print('❌ All conversion methods failed, returning hex representation');
+      return '0x${feltValue.toRadixString(16)}';
     } catch (e) {
       print('❌ Error converting Felt to string: $e');
-      try {
-        if (feltValue.toInt() > 0 && feltValue.toInt() <= 1114111) {
-          return String.fromCharCode(feltValue.toInt());
-        }
-        return feltValue.toString();
-      } catch (e2) {
-        return feltValue.toString();
-      }
+      return '0x${feltValue.toRadixString(16)}';
     }
   }
 
@@ -1331,28 +1380,107 @@ class ContractService {
     }
   }
 
+  /// Auto-release matured lock saves for the current user
+  Future<String?> autoReleaseMaturedLockSaves() async {
+    final account = _walletService.currentAccount;
+    if (account == null) {
+      print('❌ No wallet available for auto-release');
+      return null;
+    }
+
+    try {
+      print('🔄 Auto-releasing matured lock saves for user: ${account.accountAddress.toHexString()}');
+
+      // Prepare auto_release_matured_lock_saves call data
+      final calls = [
+        {
+          'contractAddress': _contractAddress.toHexString(),
+          'entrypoint': 'auto_release_matured_lock_saves',
+          'calldata': [
+            account.accountAddress.toHexString(),
+          ],
+        },
+      ];
+
+      print('🔧 Building typed data with Avnu for auto-release...');
+
+      // Build typed data with AVNU
+      final avnuBuildTypeDataResponse =
+          await _walletService.avnuProvider.buildTypedData(
+        account.accountAddress.toHexString(),
+        calls,
+        '', // use sponsor gas token
+        '', // use sponsor gas limit
+        WalletService.argentClassHash.toHexString(),
+      );
+
+      if (avnuBuildTypeDataResponse is AvnuBuildTypedDataError) {
+        print('❌ Failed to build typed data for auto-release: $avnuBuildTypeDataResponse');
+        return null; // Don't throw, just return null
+      }
+
+      final avnuTypedData =
+          avnuBuildTypeDataResponse as AvnuBuildTypedDataResult;
+
+      // Create owner account signer
+      final ownerAccountSigner = ArgentXGuardianAccountSigner(
+        ownerSigner: _walletService.ownerSigner!,
+        guardianSigner: _walletService.guardianSigner!,
+      );
+
+      // Compute message hash and sign it
+      final hash = avnuTypedData.hash(account.accountAddress);
+      final signature = await ownerAccountSigner.sign(hash, null);
+
+      print('🚀 Executing auto-release with Avnu...');
+
+      // Execute the transaction via AVNU provider
+      final avnuExecute = await _walletService.avnuProvider.execute(
+        account.accountAddress.toHexString(),
+        jsonEncode(avnuTypedData.toTypedData()),
+        signature.map((e) => e.toHexString()).toList(),
+        null, // account is already deployed
+      );
+
+      if (avnuExecute is AvnuExecuteError) {
+        print('❌ Auto-release failed: $avnuExecute');
+        return null; // Don't throw, just return null
+      }
+
+      final result = avnuExecute as AvnuExecuteResult;
+      final transactionHash = result.transactionHash;
+
+      if (transactionHash == null || transactionHash.isEmpty) {
+        print('❌ Auto-release transaction hash is null or empty');
+        return null;
+      }
+
+      print('✅ Auto-release successful! TX: $transactionHash');
+      return transactionHash;
+    } catch (e) {
+      print('❌ Error in auto-release: $e');
+      return null; // Don't throw, just return null to avoid breaking the flow
+    }
+  }
+
   /// Get all goal saves for the current user
   Future<List<Map<String, dynamic>>> getUserGoalSaves() async {
     final account = _walletService.currentAccount;
     if (account == null) {
-      throw Exception('Wallet not connected');
+      print('❌ CONTRACT SERVICE: Wallet not connected');
+      return []; // Return empty list instead of throwing
     }
 
     final userAddress = account.accountAddress;
 
     try {
-      print('🔍 Getting user goal saves for: ${userAddress.toHexString()}');
+      print('🔍 CONTRACT SERVICE: Getting user goal saves for: ${userAddress.toHexString()}');
 
       // Get live goal saves
       final liveFunctionCall = FunctionCall(
         contractAddress: _contractAddress,
         entryPointSelector: getSelectorByName('get_user_live_goal_saves'),
         calldata: [userAddress],
-      );
-
-      final liveResponse = await account.provider.call(
-        request: liveFunctionCall,
-        blockId: BlockId.latest,
       );
 
       // Get completed goal saves
@@ -1362,79 +1490,209 @@ class ContractService {
         calldata: [userAddress],
       );
 
-      final completedResponse = await account.provider.call(
-        request: completedFunctionCall,
-        blockId: BlockId.latest,
-      );
+      // Execute both calls
+      final results = await Future.wait([
+        account.provider.call(request: liveFunctionCall, blockId: BlockId.latest),
+        account.provider.call(request: completedFunctionCall, blockId: BlockId.latest),
+      ]);
 
+      final liveResponse = results[0];
+      final completedResponse = results[1];
       final goalSaves = <Map<String, dynamic>>[];
 
       // Parse live goal saves
-      liveResponse.when(
-        result: (result) {
-          if (result.isNotEmpty) {
-            // Each GoalSave struct has 10 fields, so we process in chunks of 10
-            for (int i = 0; i < result.length; i += 10) {
-              if (i + 9 < result.length) {
-                final goalSave = {
-                  'id': result[i].toBigInt(),
-                  'user': result[i + 1].toHexString(),
-                  'title': result[i + 2].toString(),
-                  'category': result[i + 3].toString(),
-                  'target_amount': result[i + 4].toBigInt(),
-                  'current_amount': result[i + 5].toBigInt(),
-                  'contribution_type': result[i + 6].toBigInt().toInt(),
-                  'contribution_amount': result[i + 7].toBigInt(),
-                  'start_time': result[i + 8].toBigInt().toInt(),
-                  'end_time': result[i + 9].toBigInt().toInt(),
-                  'is_completed': false,
-                };
-                goalSaves.add(goalSave);
-              }
-            }
-          }
+      await liveResponse.when(
+        result: (result) async {
+          print('📊 CONTRACT SERVICE: Live goal saves raw result length: ${result.length}');
+          final parsedGoalSaves = await _parseGoalSaveResults(result, false);
+          goalSaves.addAll(parsedGoalSaves);
+          print('✅ CONTRACT SERVICE: Parsed ${parsedGoalSaves.length} live goal saves');
         },
         error: (error) {
-          print('❌ Failed to get live goal saves: $error');
+          print('❌ CONTRACT SERVICE: Failed to get live goal saves: $error');
+          // Don't throw, continue with completed saves
         },
       );
 
       // Parse completed goal saves
-      completedResponse.when(
-        result: (result) {
-          if (result.isNotEmpty) {
-            // Each GoalSave struct has 10 fields, so we process in chunks of 10
-            for (int i = 0; i < result.length; i += 10) {
-              if (i + 9 < result.length) {
-                final goalSave = {
-                  'id': result[i].toBigInt(),
-                  'user': result[i + 1].toHexString(),
-                  'title': result[i + 2].toString(),
-                  'category': result[i + 3].toString(),
-                  'target_amount': result[i + 4].toBigInt(),
-                  'current_amount': result[i + 5].toBigInt(),
-                  'contribution_type': result[i + 6].toBigInt().toInt(),
-                  'contribution_amount': result[i + 7].toBigInt(),
-                  'start_time': result[i + 8].toBigInt().toInt(),
-                  'end_time': result[i + 9].toBigInt().toInt(),
-                  'is_completed': true,
-                };
-                goalSaves.add(goalSave);
-              }
-            }
-          }
+      await completedResponse.when(
+        result: (result) async {
+          print('📊 CONTRACT SERVICE: Completed goal saves raw result length: ${result.length}');
+          final parsedGoalSaves = await _parseGoalSaveResults(result, true);
+          goalSaves.addAll(parsedGoalSaves);
+          print('✅ CONTRACT SERVICE: Parsed ${parsedGoalSaves.length} completed goal saves');
         },
         error: (error) {
-          print('❌ Failed to get completed goal saves: $error');
+          print('❌ CONTRACT SERVICE: Failed to get completed goal saves: $error');
+          // Don't throw, return what we have
         },
       );
 
-      print('✅ Retrieved ${goalSaves.length} goal saves');
+      print('✅ CONTRACT SERVICE: Retrieved total ${goalSaves.length} goal saves');
       return goalSaves;
     } catch (e) {
-      print('❌ Error getting user goal saves: $e');
-      throw Exception('Failed to get user goal saves: $e');
+      print('❌ CONTRACT SERVICE: Error getting user goal saves: $e');
+      return []; // Return empty list instead of throwing
     }
+  }
+
+  /// Helper method to parse goal save results
+  Future<List<Map<String, dynamic>>> _parseGoalSaveResults(
+    List<Felt> result,
+    bool isCompleted,
+  ) async {
+    final goalSaves = <Map<String, dynamic>>[];
+
+    if (result.isEmpty) {
+      print('📝 No ${isCompleted ? 'completed' : 'live'} goal saves found');
+      return goalSaves;
+    }
+
+    print('🔍 Raw ${isCompleted ? 'completed' : 'live'} goal save result: $result');
+
+    // In Starknet, Array<T> is serialized as [length, element1, element2, ...]
+    // So we skip the first element (length) and start parsing from index 1
+    if (result.isEmpty) {
+      print('⚠️ Empty result array');
+      return goalSaves;
+    }
+
+    final arrayLength = result[0].toBigInt().toInt();
+    print('📏 Array length from contract: $arrayLength');
+
+    // GoalSave struct has 11 fields:
+    // id(u256=2), user(1), title(1), category(1), target_amount(u256=2),
+    // current_amount(u256=2), contribution_type(1), contribution_amount(u256=2),
+    // start_time(1), end_time(1), is_completed(1) = 13 total felts
+    const int structSize = 13;
+    final dataStartIndex = 1; // Skip the length element
+    final expectedTotalLength = dataStartIndex + (arrayLength * structSize);
+
+    if (result.length != expectedTotalLength) {
+      print('⚠️ Warning: Expected length $expectedTotalLength, got ${result.length}');
+    }
+
+    for (int structIndex = 0; structIndex < arrayLength; structIndex++) {
+      final i = dataStartIndex + (structIndex * structSize);
+      print('🔍 Parsing GoalSave struct $structIndex at index $i');
+      
+      if (i + structSize - 1 < result.length) {
+        try {
+          // Parse u256 fields (2 felts each)
+          BigInt parseU256(int index) {
+            if (index + 1 >= result.length) {
+              print('❌ Index out of bounds for u256 at $index');
+              return BigInt.zero;
+            }
+            final low = result[index].toBigInt();
+            final high = result[index + 1].toBigInt();
+            final value = low + (high << 128);
+            print('📊 u256 at index $index: low=$low, high=$high, result=$value');
+            return value;
+          }
+
+          // Parse according to GoalSave struct field order:
+          // id(u256), user(ContractAddress), title(felt252), category(felt252),
+          // target_amount(u256), current_amount(u256), contribution_type(u8),
+          // contribution_amount(u256), start_time(u64), end_time(u64), is_completed(bool)
+          
+          final id = parseU256(i); // id: u256 (2 felts)
+          final user = result[i + 2].toHexString(); // user: ContractAddress (1 felt)
+          final titleFelt = result[i + 3].toBigInt(); // title: felt252 (1 felt)
+          final categoryFelt = result[i + 4].toBigInt(); // category: felt252 (1 felt)
+          final targetAmount = parseU256(i + 5).toDouble() / pow(10, 6); // target_amount: u256 (2 felts)
+          final currentAmount = parseU256(i + 7).toDouble() / pow(10, 6); // current_amount: u256 (2 felts)
+          final contributionType = result[i + 9].toBigInt().toInt(); // contribution_type: u8 (1 felt)
+          final contributionAmount = parseU256(i + 10).toDouble() / pow(10, 6); // contribution_amount: u256 (2 felts)
+          final startTime = result[i + 12].toBigInt().toInt(); // start_time: u64 (1 felt)
+          final endTime = result[i + 13].toBigInt().toInt(); // end_time: u64 (1 felt)
+          final isCompletedField = isCompleted; // Use the parameter since this field might not be in the struct
+
+          print('📋 Parsed GoalSave fields:');
+          print('   ID: $id');
+          print('   User: $user');
+          print('   Title felt: $titleFelt');
+          print('   Category felt: $categoryFelt');
+          print('   Target Amount: $targetAmount USDC');
+          print('   Current Amount: $currentAmount USDC');
+          print('   Contribution Type: $contributionType');
+          print('   Contribution Amount: $contributionAmount USDC');
+          print('   Start Time: $startTime');
+          print('   End Time: $endTime');
+          print('   Is Completed: $isCompletedField');
+
+          // Convert felt252 values to strings
+          String title;
+          try {
+            if (titleFelt == BigInt.zero) {
+              title = 'Untitled';
+            } else {
+              title = _feltToString(titleFelt);
+              if (title.isEmpty) title = 'Untitled';
+            }
+          } catch (e) {
+            print('⚠️ Failed to convert title, using fallback: $e');
+            title = 'Untitled Goal';
+          }
+
+          String category;
+          try {
+            if (categoryFelt == BigInt.zero) {
+              category = 'General';
+            } else {
+              category = _feltToString(categoryFelt);
+              if (category.isEmpty) category = 'General';
+            }
+          } catch (e) {
+            print('⚠️ Failed to convert category, using fallback: $e');
+            category = 'General';
+          }
+
+          final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          final progressPercentage = targetAmount > 0 ? (currentAmount / targetAmount * 100).clamp(0.0, 100.0) : 0.0;
+          final amountRemaining = (targetAmount - currentAmount).clamp(0.0, double.infinity);
+
+          String status;
+          if (isCompletedField) {
+            status = 'completed';
+          } else if (currentTime >= endTime) {
+            status = 'expired';
+          } else if (currentAmount >= targetAmount) {
+            status = 'target_reached';
+          } else {
+            status = 'active';
+          }
+
+          final goalSave = {
+            'id': id,
+            'user': user,
+            'title': title,
+            'category': category,
+            'target_amount': targetAmount,
+            'current_amount': currentAmount,
+            'contribution_type': contributionType,
+            'contribution_amount': contributionAmount,
+            'start_time': startTime,
+            'end_time': endTime,
+            'is_completed': isCompletedField,
+            'status': status,
+            'progress_percentage': progressPercentage,
+            'amount_remaining': amountRemaining,
+          };
+
+          goalSaves.add(goalSave);
+          print('✅ Successfully parsed GoalSave: $title - $currentAmount/$targetAmount USDC');
+
+        } catch (e) {
+          print('❌ Error parsing GoalSave struct at index $i: $e');
+          continue;
+        }
+      } else {
+        print('⚠️ Incomplete struct data at index $i, skipping');
+      }
+    }
+
+    return goalSaves;
   }
 
   /// Create a goal save
@@ -2137,24 +2395,150 @@ class ContractService {
             throw Exception('Invalid group save response');
           }
 
-          // Parse the GroupSave struct
+          // Parse the GroupSave struct with correct field alignment
+          // GroupSave: id(u256=2), creator(1), title(1), description(1), category(1),
+          // target_amount(u256=2), current_amount(u256=2), contribution_type(1),
+          // contribution_amount(u256=2), is_public(1), member_count(u256=2),
+          // start_time(1), end_time(1), is_completed(1) = 19 total felts
+          
+          if (result.length < 19) {
+            throw Exception('Invalid group save response: expected 19 felts, got ${result.length}');
+          }
+
+          // Parse u256 fields (2 felts each)
+          BigInt parseU256(int index) {
+            final low = result[index].toBigInt();
+            final high = result[index + 1].toBigInt();
+            return low + (high << 128);
+          }
+
+          final id = parseU256(0); // id: u256 (2 felts)
+          final creator = result[2].toHexString(); // creator: ContractAddress (1 felt)
+          final titleFelt = result[3].toBigInt(); // title: felt252 (1 felt)
+          final descriptionFelt = result[4].toBigInt(); // description: felt252 (1 felt)
+          final categoryFelt = result[5].toBigInt(); // category: felt252 (1 felt)
+          final targetAmount = parseU256(6).toDouble() / pow(10, 6); // target_amount: u256 (2 felts)
+          final currentAmount = parseU256(8).toDouble() / pow(10, 6); // current_amount: u256 (2 felts)
+          final contributionType = result[10].toBigInt().toInt(); // contribution_type: u8 (1 felt)
+          final contributionAmount = parseU256(11).toDouble() / pow(10, 6); // contribution_amount: u256 (2 felts)
+          final isPublic = result[13].toBigInt() == BigInt.one; // is_public: bool (1 felt)
+          final memberCount = parseU256(14); // member_count: u256 (2 felts)
+          final startTime = result[16].toBigInt().toInt(); // start_time: u64 (1 felt)
+          final endTime = result[17].toBigInt().toInt(); // end_time: u64 (1 felt)
+          final isCompleted = result[18].toBigInt() == BigInt.one; // is_completed: bool (1 felt)
+
+          // Convert felt252 values to strings
+          String title;
+          try {
+            title = titleFelt == BigInt.zero ? 'Untitled' : _feltToString(titleFelt);
+            if (title.isEmpty) title = 'Untitled';
+          } catch (e) {
+            title = 'Untitled Group';
+          }
+
+          String description;
+          try {
+            description = descriptionFelt == BigInt.zero ? 'No description' : _feltToString(descriptionFelt);
+            if (description.isEmpty) description = 'No description';
+          } catch (e) {
+            description = 'No description';
+          }
+
+          String category;
+          try {
+            category = categoryFelt == BigInt.zero ? 'General' : _feltToString(categoryFelt);
+            if (category.isEmpty) category = 'General';
+          } catch (e) {
+            category = 'General';
+          }
+
+          final currentTime = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+          final progressPercentage = targetAmount > 0 ? (currentAmount / targetAmount * 100).clamp(0.0, 100.0) : 0.0;
+          final amountRemaining = (targetAmount - currentAmount).clamp(0.0, double.infinity);
+
+          String status;
+          if (isCompleted) {
+            status = 'completed';
+          } else if (currentTime >= endTime) {
+            status = 'expired';
+          } else if (currentAmount >= targetAmount) {
+            status = 'target_reached';
+          } else {
+            status = 'active';
+          }
+
+          // Convert timestamps to formatted date strings
+          String formatDate(int timestamp) {
+            try {
+              final date = DateTime.fromMillisecondsSinceEpoch(timestamp * 1000);
+              final day = date.day;
+              final month = [
+                '', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+              ][date.month];
+              final year = date.year;
+              
+              String dayWithSuffix;
+              if (day >= 11 && day <= 13) {
+                dayWithSuffix = '${day}th';
+              } else {
+                switch (day % 10) {
+                  case 1:
+                    dayWithSuffix = '${day}st';
+                    break;
+                  case 2:
+                    dayWithSuffix = '${day}nd';
+                    break;
+                  case 3:
+                    dayWithSuffix = '${day}rd';
+                    break;
+                  default:
+                    dayWithSuffix = '${day}th';
+                }
+              }
+              
+              return '$dayWithSuffix $month $year';
+            } catch (e) {
+              print('Error formatting date for timestamp $timestamp: $e');
+              return 'Invalid Date';
+            }
+          }
+
+          print('🔍 Debug timestamps - startTime: $startTime, endTime: $endTime');
+          final startDate = formatDate(startTime);
+          final endDate = formatDate(endTime);
+          print('🔍 Debug formatted dates - startDate: $startDate, endDate: $endDate');
+
+          // Calculate days left
+          final endDateTime = DateTime.fromMillisecondsSinceEpoch(endTime * 1000);
+          final now = DateTime.now();
+          final daysDifference = endDateTime.difference(now).inDays;
+          final daysLeft = daysDifference > 0 ? daysDifference : 0;
+
           final groupSaveData = {
-            'id': result[0].toBigInt(),
-            'creator': result[1].toHexString(),
-            'title': result[2].toString(), // felt252
-            'description': result[3].toString(), // felt252
-            'category': result[4].toString(), // felt252
-            'target_amount': result[5].toBigInt(),
-            'current_amount': result[6].toBigInt(),
-            'contribution_type': result[7].toBigInt().toInt(),
-            'contribution_amount': result[8].toBigInt(),
-            'is_public': result[9].toBigInt() == BigInt.one,
-            'member_count': result[10].toBigInt().toInt(),
-            'start_time': result[11].toBigInt().toInt(),
-            'end_time': result[12].toBigInt().toInt(),
-            'is_completed': result.length > 13
-                ? result[13].toBigInt() == BigInt.one
-                : false,
+            'id': id,
+            'creator': creator,
+            'title': title,
+            'name': title, // Add name alias for UI compatibility
+            'description': description,
+            'category': category,
+            'targetAmount': targetAmount,
+            'currentAmount': currentAmount,
+            'contributionType': contributionType,
+            'contributionAmount': contributionAmount,
+            'isPublic': isPublic,
+            'memberCount': memberCount.toInt(),
+            'startTime': startTime,
+            'endTime': endTime,
+            'startDate': startDate,
+            'endDate': endDate,
+            'daysLeft': daysLeft,
+            'isCompleted': isCompleted,
+            'status': status,
+            'progressPercentage': progressPercentage,
+            'amountRemaining': amountRemaining,
+            // Add frequency mapping based on contribution type
+            'frequency': contributionType == 1 ? 'Daily' : contributionType == 2 ? 'Weekly' : contributionType == 3 ? 'Monthly' : 'Manual',
           };
 
           print('✅ Group save details retrieved: $groupSaveData');
@@ -2168,6 +2552,90 @@ class ContractService {
     } catch (e) {
       print('❌ Error getting group save details: $e');
       throw Exception('Failed to get group save details: $e');
+    }
+  }
+
+  /// Break a group save (creator only)
+  Future<String> breakGroupSave({
+    required BigInt groupId,
+  }) async {
+    final account = _walletService.currentAccount;
+    if (account == null) {
+      throw Exception('Wallet not connected');
+    }
+
+    try {
+      print('💥 Breaking group save ID: $groupId');
+
+      // Convert BigInt groupId to u256 format (low, high)
+      final low = groupId & BigInt.parse('0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF');
+      final high = groupId >> 128;
+
+      // Prepare break_group_save call data
+      final calls = [
+        {
+          'contractAddress': _contractAddress.toHexString(),
+          'entrypoint': 'break_group_save',
+          'calldata': [
+            '0x${low.toRadixString(16)}',
+            '0x${high.toRadixString(16)}',
+          ],
+        },
+      ];
+
+      print('🔧 Building typed data with Avnu for group break...');
+
+      // Build typed data with AVNU
+      final avnuBuildTypeDataResponse = await _walletService.avnuProvider.buildTypedData(
+        account.accountAddress.toHexString(),
+        calls,
+        '', // use sponsor gas token
+        '', // use sponsor gas limit
+        WalletService.argentClassHash.toHexString(),
+      );
+
+      if (avnuBuildTypeDataResponse is AvnuBuildTypedDataError) {
+        throw Exception('Failed to build typed data: $avnuBuildTypeDataResponse');
+      }
+
+      final avnuTypedData = avnuBuildTypeDataResponse as AvnuBuildTypedDataResult;
+
+      // Create account signer
+      final ownerAccountSigner = ArgentXGuardianAccountSigner(
+        ownerSigner: _walletService.ownerSigner!,
+        guardianSigner: _walletService.guardianSigner!,
+      );
+
+      // Compute message hash and sign it
+      final hash = avnuTypedData.hash(account.accountAddress);
+      final signature = await ownerAccountSigner.sign(hash, null);
+
+      print('🚀 Executing group break with Avnu...');
+
+      // Execute the transaction via AVNU provider
+      final avnuExecute = await _walletService.avnuProvider.execute(
+        account.accountAddress.toHexString(),
+        jsonEncode(avnuTypedData.toTypedData()),
+        signature.map((e) => e.toHexString()).toList(),
+        null, // account is already deployed
+      );
+
+      if (avnuExecute is AvnuExecuteError) {
+        throw Exception('Group break failed: $avnuExecute');
+      }
+
+      final result = avnuExecute as AvnuExecuteResult;
+      final transactionHash = result.transactionHash;
+
+      if (transactionHash == null || transactionHash.isEmpty) {
+        throw Exception('Transaction hash is null or empty');
+      }
+
+      print('✅ Break group save transaction submitted: $transactionHash');
+      return transactionHash;
+    } catch (e) {
+      print('❌ Error breaking group save: $e');
+      throw Exception('Failed to break group save: $e');
     }
   }
 
@@ -2424,8 +2892,8 @@ class ContractService {
     // id(u256=2), creator(1), title(1), description(1), category(1),
     // target_amount(u256=2), current_amount(u256=2), contribution_type(1),
     // contribution_amount(u256=2), is_public(1), member_count(u256=2),
-    // start_time(1), end_time(1), is_completed(1) = 16 total felts
-    const int structSize = 16;
+    // start_time(1), end_time(1), is_completed(1) = 19 total felts
+    const int structSize = 19;
     final dataStartIndex = 1; // Skip the length element
     final expectedTotalLength = dataStartIndex + (arrayLength * structSize);
 
@@ -2436,38 +2904,59 @@ class ContractService {
 
     for (int structIndex = 0; structIndex < arrayLength; structIndex++) {
       final i = dataStartIndex + (structIndex * structSize);
+      print('🔍 Parsing GroupSave struct $structIndex at index $i');
+      
       if (i + structSize - 1 < result.length) {
         try {
           // Parse u256 fields (2 felts each)
           BigInt parseU256(int index) {
+            if (index + 1 >= result.length) {
+              print('❌ Index out of bounds for u256 at $index');
+              return BigInt.zero;
+            }
             final low = result[index].toBigInt();
             final high = result[index + 1].toBigInt();
-            return low + (high << 128);
+            final value = low + (high << 128);
+            print('📊 u256 at index $index: low=$low, high=$high, result=$value');
+            return value;
           }
 
-          final id = parseU256(i); // id: u256
-          final creator =
-              result[i + 2].toHexString(); // creator: ContractAddress
-          final titleFelt = result[i + 3].toBigInt(); // title: felt252
-          final descriptionFelt =
-              result[i + 4].toBigInt(); // description: felt252
-          final categoryFelt = result[i + 5].toBigInt(); // category: felt252
-          final targetAmount =
-              parseU256(i + 6).toDouble() / pow(10, 6); // target_amount: u256
-          final currentAmount =
-              parseU256(i + 8).toDouble() / pow(10, 6); // current_amount: u256
-          final contributionType =
-              result[i + 10].toBigInt().toInt(); // contribution_type: u8
-          final contributionAmount = parseU256(i + 11).toDouble() /
-              pow(10, 6); // contribution_amount: u256
-          final isPublic =
-              result[i + 13].toBigInt() == BigInt.one; // is_public: bool
-          final memberCount = parseU256(i + 14); // member_count: u256
-          final startTime =
-              result[i + 16].toBigInt().toInt(); // start_time: u64
-          final endTime = result[i + 17].toBigInt().toInt(); // end_time: u64
-          final isCompletedField =
-              result[i + 18].toBigInt() == BigInt.one; // is_completed: bool
+          // Parse according to GroupSave struct field order:
+          // id(u256), creator(ContractAddress), title(felt252), description(felt252), category(felt252),
+          // target_amount(u256), current_amount(u256), contribution_type(u8),
+          // contribution_amount(u256), is_public(bool), member_count(u256),
+          // start_time(u64), end_time(u64), is_completed(bool)
+          
+          final id = parseU256(i); // id: u256 (2 felts)
+          final creator = result[i + 2].toHexString(); // creator: ContractAddress (1 felt)
+          final titleFelt = result[i + 3].toBigInt(); // title: felt252 (1 felt)
+          final descriptionFelt = result[i + 4].toBigInt(); // description: felt252 (1 felt)
+          final categoryFelt = result[i + 5].toBigInt(); // category: felt252 (1 felt)
+          final targetAmount = parseU256(i + 6).toDouble() / pow(10, 6); // target_amount: u256 (2 felts)
+          final currentAmount = parseU256(i + 8).toDouble() / pow(10, 6); // current_amount: u256 (2 felts)
+          final contributionType = result[i + 10].toBigInt().toInt(); // contribution_type: u8 (1 felt)
+          final contributionAmount = parseU256(i + 11).toDouble() / pow(10, 6); // contribution_amount: u256 (2 felts)
+          final isPublic = result[i + 13].toBigInt() == BigInt.one; // is_public: bool (1 felt)
+          final memberCount = parseU256(i + 14); // member_count: u256 (2 felts)
+          final startTime = result[i + 16].toBigInt().toInt(); // start_time: u64 (1 felt)
+          final endTime = result[i + 17].toBigInt().toInt(); // end_time: u64 (1 felt)
+          final isCompletedField = result[i + 18].toBigInt() == BigInt.one; // is_completed: bool (1 felt)
+
+          print('📋 Parsed GroupSave fields:');
+          print('   ID: $id');
+          print('   Creator: $creator');
+          print('   Title felt: $titleFelt');
+          print('   Description felt: $descriptionFelt');
+          print('   Category felt: $categoryFelt');
+          print('   Target Amount: $targetAmount USDC');
+          print('   Current Amount: $currentAmount USDC');
+          print('   Contribution Type: $contributionType');
+          print('   Contribution Amount: $contributionAmount USDC');
+          print('   Is Public: $isPublic');
+          print('   Member Count: $memberCount');
+          print('   Start Time: $startTime');
+          print('   End Time: $endTime');
+          print('   Is Completed: $isCompletedField');
 
           // Convert felt252 values to strings
           String title;

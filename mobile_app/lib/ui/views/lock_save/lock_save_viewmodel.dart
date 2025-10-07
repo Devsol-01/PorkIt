@@ -1,455 +1,3 @@
-// import 'package:mobile_app/services/firebase_wallet_manager_service.dart';
-// import 'package:mobile_app/services/wallet_service.dart';
-// import 'package:stacked/stacked.dart';
-// import 'package:stacked_services/stacked_services.dart';
-// import 'package:mobile_app/services/contract_service.dart';
-// import 'package:mobile_app/ui/views/dashboard/dashboard_viewmodel.dart';
-// import 'package:mobile_app/app/app.locator.dart';
-
-// class LockSaveViewModel extends BaseViewModel {
-//   // Services
-//   final ContractService _contractService = locator<ContractService>();
-//   final WalletService _walletService = locator<WalletService>();
-//   final NavigationService _navigationService = NavigationService();
-//   final SnackbarService _snackbarService = locator<SnackbarService>();
-//     final FirebaseWalletManagerService _firebaseWalletManager =
-//       locator<FirebaseWalletManagerService>();
-
-//   // Reference to dashboard viewmodel for balance updates
-//   DashboardViewModel? _dashboardViewModel;
-
-//   // State properties
-//   bool _isOngoingSelected = true;
-//   bool _isBalanceVisible = true;
-//   double _balance = 0.0;
-//   bool _isLoading = false;
-//   List<Map<String, dynamic>> _ongoingLocks = [];
-//   List<Map<String, dynamic>> _completedLocks = [];
-
-//     // Getters
-//   bool get isOngoingSelected => _isOngoingSelected;
-//   double get rawBalance => _balance;
-//   bool get isBalanceVisible => _isBalanceVisible;
-//   List<Map<String, dynamic>> get ongoingLocks => _ongoingLocks;
-//   List<Map<String, dynamic>> get completedLocks => _completedLocks;
-//   List<Map<String, dynamic>> get lockPeriods => _lockPeriods;
-//   bool get isLoading => _isLoading;
-
-//   // Lock period configurations with interest rates
-//   final List<Map<String, dynamic>> _lockPeriods = [
-//     {
-//       'id': '10-30',
-//       'label': '10-30 days',
-//       'minDays': 10,
-//       'maxDays': 30,
-//       'interestRate': 5.5,
-//       'color': 0xFF4CAF50,
-//     },
-//     {
-//       'id': '31-60',
-//       'label': '31-60 days',
-//       'minDays': 31,
-//       'maxDays': 60,
-//       'interestRate': 6.2,
-//       'color': 0xFF2196F3,
-//     },
-//     {
-//       'id': '91-180',
-//       'label': '91-180 days',
-//       'minDays': 91,
-//       'maxDays': 180,
-//       'interestRate': 7.8,
-//       'color': 0xFF9C27B0,
-//     },
-//     {
-//       'id': '181-270',
-//       'label': '181-270 days',
-//       'minDays': 181,
-//       'maxDays': 270,
-//       'interestRate': 9.1,
-//       'color': 0xFFFF9800,
-//     },
-//     {
-//       'id': '271-365',
-//       'label': '271-365 days',
-//       'minDays': 271,
-//       'maxDays': 365,
-//       'interestRate': 12.5,
-//       'color': 0xFFE91E63,
-//     },
-//     {
-//       'id': '366-730',
-//       'label': '1-2 years',
-//       'minDays': 366,
-//       'maxDays': 730,
-//       'interestRate': 15.8,
-//       'color': 0xFF673AB7,
-//     },
-//     {
-//       'id': '731+',
-//       'label': 'Above 2 years',
-//       'minDays': 731,
-//       'maxDays': 1095, // 3 years max
-//       'interestRate': 18.5,
-//       'color': 0xFF795548,
-//     },
-//   ];
-
-//   LockSaveViewModel() {
-//     initialize();
-//   }
-
-//   Future<void> initialize([DashboardViewModel? dashboardViewModel]) async {
-//     await loadBalance();
-//     await loadUserLocks();
-//     print(
-//         '🔒 Lock Save Debug: Loaded ${_ongoingLocks.length} ongoing locks, ${_completedLocks.length} completed locks');
-
-//     // Always show real data, don't fall back to sample data
-//     // Sample data is only for legacy UI components if needed
-//     if (_ongoingLocks.isEmpty && _completedLocks.isEmpty) {
-//       print(
-//           '🔒 No real lock saves found, but not using sample data - showing empty state');
-//     }
-//   }
-
-//   // Real data getters - no legacy mock data
-
-//   List<dynamic> get currentLocks =>
-//       _isOngoingSelected ? _ongoingLocks : _completedLocks;
-
-//   void setOngoingSelected(bool value) {
-//     _isOngoingSelected = value;
-//     notifyListeners();
-//   }
-
-//    void toggleBalanceVisibility() {
-//     _isBalanceVisible = !_isBalanceVisible;
-//     notifyListeners();
-//   }
-
-//   void navigateBack() {
-//     _navigationService.back();
-//   }
-
-//   // void navigateToCreateLock() {
-//   //   // Navigate to CreateLockView page with first period as default
-//   //   _navigationService.navigateToView(
-//   //     CreateLockView(selectedPeriod: _lockPeriods.first),
-//   //   );
-//   // }
-
-//   void navigateToCreateLockWithPeriod(Map<String, dynamic> period) {
-//     // Navigate to create lock page with selected period
-//     // TODO: Implement proper navigation when routes are set up
-//     // _navigationService.navigateTo('/create-lock', arguments: period);
-//   }
-
-//   /// Refresh lock saves (pull-to-refresh)
-
-//   // Load lock save balance from contract
-//   Future<void> loadBalance() async {
-//     _isLoading = true;
-//     notifyListeners();
-
-//     try {
-//       // Check if wallet is available in WalletService first
-//       if (_walletService.currentAccount == null) {
-//         print('⚠️ No wallet in WalletService, checking Firebase...');
-
-//         // Check if user is authenticated with Firebase
-//         if (_firebaseWalletManager.isAuthenticated) {
-//           print(
-//               '✅ User authenticated, initializing Firebase wallet manager...');
-
-//           // Initialize Firebase wallet manager to load wallet
-//           await _firebaseWalletManager.initialize();
-
-//           // Check if wallet is now available
-//           if (_walletService.currentAccount == null) {
-//             print(
-//                 '❌ Firebase initialization didn\'t load wallet, trying direct load...');
-
-//             // Try direct load as fallback
-//             try {
-//               await _walletService.loadWallet();
-//               if (_walletService.currentAccount == null) {
-//                 print('❌ Still no wallet available after all attempts');
-//                 _balance = 0.0;
-//                 return;
-//               }
-//             } catch (e) {
-//               print('❌ Error in direct wallet load: $e');
-//               _balance = 0.0;
-//               return;
-//             }
-//           }
-//         } else {
-//           print('❌ User not authenticated with Firebase');
-//           _balance = 0.0;
-//           return;
-//         }
-//       }
-
-//       print('💰 Loading flexi save balance from contract...');
-
-//       // Get real flexi balance from contract
-//       final balanceBigInt = await _contractService.getUserLockSaveBalance();
-
-//       final balance = balanceBigInt.toDouble() /
-//           1000000; // Convert from USDC units to readable format
-//       print('✅ Flexi save balance loaded: $balance USDC');
-//       _balance = balance;
-//     } catch (e) {
-//       print('❌ Error loading balance: $e');
-//       print('⚠️ Using zero balance due to error');
-//       _balance = 0.0;
-//     } finally {
-//       _isLoading = false;
-//       notifyListeners();
-//     }
-//   }
-
-//   // Load user locks from contract
-//   Future<void> loadUserLocks() async {
-//     try {
-//       // Get all lock saves for the current user
-//       final locks = await _contractService.getUserLockSaves();
-//       print('🔒 Raw locks from contract: ${locks.length} total');
-
-//       _ongoingLocks = [];
-//       _completedLocks = [];
-
-//       // Filter locks into ongoing and completed
-//       for (final lock in locks) {
-//         print('🔍 Processing lock: $lock');
-//         final isMatured = lock['is_matured'] ?? false;
-//         final isWithdrawn = lock['is_withdrawn'] ?? false;
-
-//         // Fix: Map contract lock data to expected UI fields
-//         // Convert maturity_time timestamp to date string
-//         String? maturityDateString;
-//         if (lock['maturity_time'] != null) {
-//           final maturityTimestamp = lock['maturity_time'] as int;
-//           final maturityDate =
-//               DateTime.fromMillisecondsSinceEpoch(maturityTimestamp * 1000);
-//           maturityDateString =
-//               '${maturityDate.day}/${maturityDate.month}/${maturityDate.year}';
-//         }
-
-//         final mappedLock = {
-//           'title': lock['title'] ?? 'Untitled Lock',
-//           'amount': lock['amount'] ?? 0.0,
-//           'maturityDate': maturityDateString,
-//           'status': isWithdrawn ? 'completed' : 'ongoing',
-//           'isMatured': isMatured,
-//           'isWithdrawn': isWithdrawn,
-//         };
-
-//         print('🔍 Mapped lock: $mappedLock');
-
-//         if (isWithdrawn) {
-//           _completedLocks.add(mappedLock);
-//         } else {
-//           _ongoingLocks.add(mappedLock);
-//         }
-//       }
-
-//       print(
-//           '🔒 Filtered: ${_ongoingLocks.length} ongoing, ${_completedLocks.length} completed');
-
-//       // Force UI update
-//       notifyListeners();
-//     } catch (e) {
-//       print('❌ Error loading user locks: $e');
-//       _ongoingLocks = [];
-//       _completedLocks = [];
-//       notifyListeners();
-//     }
-//   }
-
-//   // Create a new safelock using contract service
-//   Future<void> createLockSave(
-//     double amount,
-//     String title,
-//     int lockDays,
-//   ) async {
-//     if (amount <= 0) {
-//       _showErrorSnackbar('Please enter a valid amount');
-//       return;
-//     }
-
-//     // Check if dashboard has sufficient balance
-//     if (_dashboardViewModel != null) {
-//       if (_dashboardViewModel!.dashboardBalance < amount) {
-//         _showErrorSnackbar('Insufficient balance in dashboard');
-//         return;
-//       }
-//     }
-
-//     setBusy(true);
-//     try {
-//       // Transfer from dashboard to lock save
-//       bool transferSuccess = false;
-//       if (_dashboardViewModel != null) {
-//         transferSuccess = _dashboardViewModel!.transferToLockSave(amount);
-//       }
-
-//       if (transferSuccess) {
-//         // Simulate contract interaction
-//         await Future.delayed(Duration(milliseconds: 1500));
-//         // TODO: Implement contract integration
-//         // final lockId = await _contractService.createLockSave(
-//         //   amount: amount,
-//         //   title: title,
-//         //   durationDays: lockDays,
-//         //   fundSource: 'Porket Wallet',
-//         // );
-//         final lockId = 'mock_lock_${DateTime.now().millisecondsSinceEpoch}';
-
-//         if (lockId.isNotEmpty) {
-//           // Refresh data
-//           await loadBalance();
-//           await loadUserLocks();
-
-//           _showSuccessSnackbar(
-//               '🔒 Lock save created successfully! \$${amount.toStringAsFixed(2)} locked for $lockDays days');
-//         } else {
-//           _showErrorSnackbar('Failed to create lock save');
-//           // Rollback the transfer on error
-//           if (_dashboardViewModel != null) {
-//             _dashboardViewModel!.transferFromFlexiSave(amount);
-//           }
-//         }
-//       } else {
-//         _showErrorSnackbar('Transfer failed. Please try again.');
-//       }
-//     } catch (e) {
-//       print('Error creating lock save: $e');
-//       _showErrorSnackbar('Error creating lock save: $e');
-
-//       // Rollback the transfer on error
-//       if (_dashboardViewModel != null) {
-//         _dashboardViewModel!.transferFromFlexiSave(amount);
-//       }
-//     } finally {
-//       setBusy(false);
-//     }
-//   }
-
-//   // Calculate interest for preview using contract service
-//   Future<Map<String, dynamic>> calculateLockPreview(
-//     double amount,
-//     int lockDays,
-//     String periodId,
-//   ) async {
-//     try {
-//       // TODO: Implement contract integration
-//       // final preview = await _contractService.calculateLockInterest(
-//       //   amount: amount,
-//       //   durationDays: lockDays,
-//       // );
-
-//       // Fallback to local calculation
-//       final period = _lockPeriods.firstWhere((p) => p['id'] == periodId,
-//           orElse: () => _lockPeriods[0]);
-//       final rate = period['interestRate'] / 100;
-//       final interest = (amount * rate * lockDays) / 365;
-//       final maturityDate = DateTime.now().add(Duration(days: lockDays));
-
-//       return {
-//         'interest': interest,
-//         'totalPayout': amount + interest,
-//         'maturityDate':
-//             '${maturityDate.day}/${maturityDate.month}/${maturityDate.year}',
-//       };
-//     } catch (e) {
-//       print('Error calculating lock preview: $e');
-//       // Fallback to local calculation
-//       final period = _lockPeriods.firstWhere((p) => p['id'] == periodId);
-//       final rate = period['interestRate'] / 100;
-//       final interest = (amount * rate * lockDays) / 365;
-//       final maturityDate = DateTime.now().add(Duration(days: lockDays));
-
-//       return {
-//         'interest': interest,
-//         'totalPayout': amount + interest,
-//         'maturityDate':
-//             '${maturityDate.day}/${maturityDate.month}/${maturityDate.year}',
-//       };
-//     }
-//   }
-
-//   // Withdraw from matured lock using contract service
-//   Future<void> withdrawLock(String lockId) async {
-//     setBusy(true);
-//     try {
-//       // TODO: Implement contract integration
-//       // final txHash = await _contractService.withdrawLockSave(lockId: lockId);
-//       final txHash = 'mock_tx_${DateTime.now().millisecondsSinceEpoch}';
-//       if (txHash.isNotEmpty) {
-//         print('Lock withdrawal successful');
-//         // Refresh data
-//         await loadBalance();
-//         await loadUserLocks();
-//       } else {
-//         print('Lock withdrawal failed');
-//       }
-//     } catch (e) {
-//       print('Error withdrawing lock: $e');
-//     } finally {
-//       setBusy(false);
-//     }
-//   }
-
-//   // Break lock early (with penalty) using contract service
-//   Future<void> breakLock(String lockId) async {
-//     setBusy(true);
-//     try {
-//       // TODO: Implement contract integration
-//       // final txHash = await _contractService.breakLockSave(lockId: lockId);
-//       final txHash = 'mock_tx_${DateTime.now().millisecondsSinceEpoch}';
-//       if (txHash.isNotEmpty) {
-//         print('Lock break successful (with penalty)');
-//         // Refresh data
-//         await loadBalance();
-//         await loadUserLocks();
-//       } else {
-//         print('Lock break failed');
-//       }
-//     } catch (e) {
-//       print('Error breaking lock: $e');
-//     } finally {
-//       setBusy(false);
-//     }
-//   }
-
-//   // Set dashboard viewmodel reference for balance transfers
-//   void setDashboardViewModel(DashboardViewModel? dashboardViewModel) {
-//     _dashboardViewModel = dashboardViewModel;
-//   }
-
-//   // Helper methods for snackbars
-//   void _showSuccessSnackbar(String message) {
-//     _snackbarService.showSnackbar(
-//       message: message,
-//       duration: Duration(seconds: 3),
-//     );
-//   }
-
-//   void _showErrorSnackbar(String message) {
-//     _snackbarService.showSnackbar(
-//       message: message,
-//       duration: Duration(seconds: 4),
-//     );
-//   }
-
-//   @override
-//   void dispose() {
-//     // Dispose any controllers or listeners here if any
-//     super.dispose();
-//   }
-// }
 
 import 'package:mobile_app/services/firebase_wallet_manager_service.dart';
 import 'package:mobile_app/services/wallet_service.dart';
@@ -616,6 +164,19 @@ class LockSaveViewModel extends BaseViewModel {
 
       print('🔄 Refreshing lock save data...');
 
+      // First try auto-release, then refresh both balance and locks
+      try {
+        print('🔄 Auto-releasing matured locks during refresh...');
+        final autoReleaseResult = await _contractService.autoReleaseMaturedLockSaves();
+        if (autoReleaseResult != null) {
+          print('✅ Auto-release during refresh completed with TX: $autoReleaseResult');
+          // Wait a moment for the transaction to be processed
+          await Future.delayed(Duration(milliseconds: 1000));
+        }
+      } catch (e) {
+        print('⚠️ Auto-release during refresh failed, continuing: $e');
+      }
+
       // Refresh both balance and locks
       await Future.wait([
         loadBalance(),
@@ -677,37 +238,75 @@ class LockSaveViewModel extends BaseViewModel {
 
       print('🔒 Loading user locks from contract...');
 
-      // Use the improved getUserLockSaves method
-      final locks = await _contractService.getUserLockSaves();
-      print('🔒 Raw locks from contract: ${locks.length} total');
+      // First, try to auto-release any matured lock saves
+      try {
+        print('🔄 Attempting to auto-release matured locks...');
+        final autoReleaseResult = await _contractService.autoReleaseMaturedLockSaves();
+        if (autoReleaseResult != null) {
+          print('✅ Auto-release completed with TX: $autoReleaseResult');
+          // Wait a moment for the transaction to be processed
+          await Future.delayed(Duration(milliseconds: 1000));
+        } else {
+          print('ℹ️ No matured locks to auto-release or auto-release skipped');
+        }
+      } catch (e) {
+        print('⚠️ Auto-release failed, continuing with normal flow: $e');
+        // Don't let auto-release failure block the normal flow
+      }
+
+      // Load ongoing and matured locks separately for better accuracy
+      final ongoingLocksTask = _contractService.getOngoingLockSaves();
+      final maturedLocksTask = _contractService.getMaturedLockSaves();
+
+      final results = await Future.wait([ongoingLocksTask, maturedLocksTask]);
+      final ongoingLocks = results[0];
+      final maturedLocks = results[1];
+
+      print('🔒 Raw locks from contract: ${ongoingLocks.length} ongoing, ${maturedLocks.length} matured');
 
       _ongoingLocks = [];
       _completedLocks = [];
 
-      // Process each lock with improved error handling
-      for (int i = 0; i < locks.length; i++) {
+      // Process ongoing locks
+      for (int i = 0; i < ongoingLocks.length; i++) {
         try {
-          final lock = locks[i];
-          print('🔍 Processing lock $i: $lock');
+          final lock = ongoingLocks[i];
+          print('🔍 Processing ongoing lock $i: $lock');
 
           final mappedLock = _mapContractLockToUI(lock);
 
           if (mappedLock != null) {
             print(
-                '✅ Successfully mapped lock $i: ${mappedLock['title']} - ${mappedLock['amount']} USDC');
-
-            if (mappedLock['isWithdrawn'] == true) {
-              _completedLocks.add(mappedLock);
-              print('   -> Added to completed locks');
-            } else {
-              _ongoingLocks.add(mappedLock);
-              print('   -> Added to ongoing locks');
-            }
+                '✅ Successfully mapped ongoing lock $i: ${mappedLock['title']} - ${mappedLock['amount']} USDC');
+            _ongoingLocks.add(mappedLock);
+            print('   -> Added to ongoing locks');
           } else {
-            print('❌ Failed to map lock $i - skipping');
+            print('❌ Failed to map ongoing lock $i - skipping');
           }
         } catch (e) {
-          print('⚠️ Error processing individual lock at index $i: $e');
+          print('⚠️ Error processing individual ongoing lock at index $i: $e');
+          // Continue processing other locks
+        }
+      }
+
+      // Process matured locks (these should go to completed)
+      for (int i = 0; i < maturedLocks.length; i++) {
+        try {
+          final lock = maturedLocks[i];
+          print('🔍 Processing matured lock $i: $lock');
+
+          final mappedLock = _mapContractLockToUI(lock);
+
+          if (mappedLock != null) {
+            print(
+                '✅ Successfully mapped matured lock $i: ${mappedLock['title']} - ${mappedLock['amount']} USDC');
+            _completedLocks.add(mappedLock);
+            print('   -> Added to completed locks');
+          } else {
+            print('❌ Failed to map matured lock $i - skipping');
+          }
+        } catch (e) {
+          print('⚠️ Error processing individual matured lock at index $i: $e');
           // Continue processing other locks
         }
       }
@@ -903,14 +502,6 @@ class LockSaveViewModel extends BaseViewModel {
       print(
           '🔒 Creating lock save: amount=$amount, title=$title, days=$lockDays');
 
-      // TODO: Replace with actual contract call
-      // final lockId = await _contractService.createLockSave(
-      //   amount: amount,
-      //   title: title,
-      //   durationDays: lockDays,
-      // );
-
-      // Simulate contract interaction for now
       await Future.delayed(Duration(milliseconds: 1500));
       final lockId = 'lock_${DateTime.now().millisecondsSinceEpoch}';
 

@@ -1,15 +1,7 @@
-# Contract Service Fixes
+# TODO
 
-## Critical Issues to Fix
-- [ ] Fix duplicate `dart:math` imports
-- [ ] Fix GoalSave struct parsing (15 fields, not 10)
-- [ ] Fix GroupSave struct parsing (18 fields, not 13)
-- [ ] Fix copy-paste errors in withdrawal methods
-- [ ] Improve error handling consistency
-- [ ] Clean up commented code
+## Completed Tasks
+- [x] Make the copy icon in dashboard work - Added functionality to copy wallet address to clipboard when the copy icon is tapped in the dashboard balance card.
 
-## Testing
-- [ ] Test lock save functions
-- [ ] Test goal save functions
-- [ ] Test group save functions
-- [ ] Test balance retrieval functions
+## Pending Tasks
+- [ ] Test the copy functionality in the app to ensure it works correctly.

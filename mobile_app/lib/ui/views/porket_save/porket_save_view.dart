@@ -173,6 +173,108 @@ class PorketSaveView extends StackedView<PorketSaveViewModel> {
     );
   }
 
+    Widget _buildSavingsCard({
+    required String title,
+    required String subtitle,
+    required Color backgroundColor,
+    required Color borderColor,
+    required Color iconColor,
+    required Color textColor,
+    required IconData icon,
+    required Color decorativeColor,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        border: Border.all(color: borderColor),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Stack(
+        children: [
+          // Decorative circles in background
+          Positioned(
+            right: -20,
+            bottom: -20,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.3),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          Positioned(
+            right: -40,
+            top: -20,
+            child: Container(
+              width: 60,
+              height: 60,
+              decoration: BoxDecoration(
+                color: Colors.grey.withOpacity(0.2),
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+          
+          // Main content
+          Padding(
+            padding: const EdgeInsets.all(15),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Icon container
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: iconColor.withOpacity(0.1),
+                        blurRadius: 5,
+                        offset: const Offset(1, 1),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    icon,
+                    color: iconColor,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(height: 22),
+                
+                // Title
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                
+                // Subtitle
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w400,
+                    color: textColor.withOpacity(0.8),
+                    height: 1.25,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _AutoSaveCard(BuildContext context, PorketSaveViewModel viewModel) {
     return Container(
       width: double.infinity,

@@ -5,13 +5,16 @@ import 'package:mobile_app/app/app.bottomsheets.dart';
 import 'package:mobile_app/app/app.locator.dart';
 import 'package:mobile_app/app/app.router.dart';
 import 'package:mobile_app/services/contract_service.dart';
-import 'package:mobile_app/ui/views/group_save_details/group_save_details_view.dart';
+import 'package:mobile_app/services/wallet_service.dart';
+import 'package:mobile_app/services/firebase_wallet_manager_service.dart';
 
 class GroupSaveViewModel extends BaseViewModel {
   // Services
   final ContractService _contractService = locator<ContractService>();
   final NavigationService _navigationService = locator<NavigationService>();
   final _bottomSheetService = locator<BottomSheetService>();
+  final WalletService _walletService = locator<WalletService>();
+  final FirebaseWalletManagerService _firebaseWalletManager = locator<FirebaseWalletManagerService>();
 
   // State properties
   bool _isOngoingSelected = true;
@@ -40,10 +43,7 @@ class GroupSaveViewModel extends BaseViewModel {
 
   Future<void> initialize() async {
     await loadGroupSaveBalance();
-    await loadUserGroups();
-    await loadPublicGroups();
-    // Keep sample data for UI testing
-    _initializeSampleData();
+    await loadUserGroupSaves();
   }
 
   void toggleBalanceVisibility() {
@@ -51,55 +51,201 @@ class GroupSaveViewModel extends BaseViewModel {
     notifyListeners();
   }
 
-  // Load group save balance from contract
+  // Ensure wallet is available before contract calls
+  Future<void> _ensureWalletAvailable() async {
+    if (_walletService.currentAccount != null) {
+      return; // Wallet already available
+    }
+
+    print('⚠️ No wallet in WalletService, checking Firebase...');
+
+    if (_firebaseWalletManager.isAuthenticated) {
+      print('✅ User authenticated, initializing Firebase wallet manager...');
+      await _firebaseWalletManager.initialize();
+
+      if (_walletService.currentAccount == null) {
+        print('❌ Firebase initialization didn\'t load wallet, trying direct load...');
+        try {
+          await _walletService.loadWallet();
+        } catch (e) {
+          print('❌ Error in direct wallet load: $e');
+        }
+      }
+    } else {
+      print('❌ User not authenticated with Firebase');
+    }
+  }
+
+  // Load group save balance from contract with improved error handling
   Future<void> loadGroupSaveBalance() async {
     try {
-      // Get the actual user group save balance from contract
+      await _ensureWalletAvailable();
+
+      if (_walletService.currentAccount == null) {
+        print('❌ No wallet available for loading group save balance');
+        _groupSaveBalance = 0.0;
+        return;
+      }
+
+      print('💰 Loading group save balance from contract...');
       final balanceBigInt = await _contractService.getUserGroupSaveBalance();
-      // Convert from raw USDC units (6 decimals) to readable format
-      _groupSaveBalance = balanceBigInt.toDouble() / 1000000.0;
-      notifyListeners();
+      final balance = balanceBigInt.toDouble() / 1000000; // Convert from USDC units
+
+      print('✅ Group save balance loaded: $balance USDC');
+      _groupSaveBalance = balance;
     } catch (e) {
-      print('Error loading group save balance: $e');
+      print('❌ Error loading group save balance: $e');
       _groupSaveBalance = 0.0;
+      // Don't throw here, just log and continue
     }
   }
 
-  // Load user groups from contract
-// Update the loadUserGroups method to use the correct field names
-  Future<void> loadUserGroups() async {
+  // Load user group saves from contract using improved method
+  Future<void> loadUserGroupSaves() async {
     try {
-      final groups = await _contractService.getUserGroupSaves();
-      // Use 'isCompleted' instead of 'is_completed' to match the parsed data structure
-      _liveGroups =
-          groups.where((group) => group['isCompleted'] != true).toList();
-      _completedGroups =
-          groups.where((group) => group['isCompleted'] == true).toList();
-      notifyListeners();
-    } catch (e) {
-      print('Error loading user groups: $e');
+      // Ensure wallet is available
+      await _ensureWalletAvailable();
+
+      if (_walletService.currentAccount == null) {
+        print('❌ No wallet available for loading group saves');
+        _liveGroups = [];
+        _completedGroups = [];
+        return;
+      }
+
+      print('👥 Loading user group saves from contract...');
+
+      // Use the getUserGroupSaves method
+      final groupSaves = await _contractService.getUserGroupSaves();
+      print('👥 Raw group saves from contract: ${groupSaves.length} total');
+
       _liveGroups = [];
       _completedGroups = [];
-    }
-  }
 
-  // Load public groups from contract
-  Future<void> loadPublicGroups() async {
-    try {
-      final groups = await _contractService.getUserGroupSaves();
-      // Use 'isPublic' instead of 'is_public' to match the parsed data structure
-      _publicGroups =
-          groups.where((group) => group['isPublic'] == true).toList();
-      notifyListeners();
+      // Process each group save with improved error handling
+      for (int i = 0; i < groupSaves.length; i++) {
+        try {
+          final groupSave = groupSaves[i];
+          print('🔍 Processing group save $i: $groupSave');
+
+          final mappedGroup = _mapContractGroupToUI(groupSave);
+
+          if (mappedGroup != null) {
+            print(
+                '✅ Successfully mapped group $i: ${mappedGroup['title']} - ${mappedGroup['currentAmount']} USDC');
+
+            if (mappedGroup['isCompleted'] == true) {
+              _completedGroups.add(mappedGroup);
+              print('   -> Added to completed groups');
+            } else {
+              _liveGroups.add(mappedGroup);
+              print('   -> Added to live groups');
+            }
+          } else {
+            print('❌ Failed to map group save $i - skipping');
+          }
+        } catch (e) {
+          print('⚠️ Error processing individual group save at index $i: $e');
+          // Continue processing other group saves
+        }
+      }
+
+      print(
+          '👥 Final result: ${_liveGroups.length} live groups, ${_completedGroups.length} completed groups');
+
+      // Log sample data for debugging
+      if (_liveGroups.isNotEmpty) {
+        print('📋 Sample live group: ${_liveGroups.first}');
+      }
+      if (_completedGroups.isNotEmpty) {
+        print('📋 Sample completed group: ${_completedGroups.first}');
+      }
     } catch (e) {
-      print('Error loading public groups: $e');
-      _publicGroups = [];
+      print('❌ Error loading user group saves: $e');
+      _liveGroups = [];
+      _completedGroups = [];
+      // Don't throw here, just log and set empty arrays
     }
   }
 
-  void _initializeSampleData() {
-    // All sample data removed - using real contract data only
-    // Data loaded from contract in respective load functions
+  // Helper method to map contract group save data to UI format
+  Map<String, dynamic>? _mapContractGroupToUI(
+      Map<String, dynamic> contractGroup) {
+    try {
+      print('🔄 Mapping contract group: $contractGroup');
+
+      final id = contractGroup['id'];
+      final title = contractGroup['title'] ?? 'Untitled Group';
+      final description = contractGroup['description'] ?? '';
+      final category = contractGroup['category'] ?? 'General';
+      final targetAmount = (contractGroup['targetAmount'] ?? 0.0) as double;
+      final currentAmount = (contractGroup['currentAmount'] ?? 0.0) as double;
+      final memberCount = contractGroup['memberCount'] ?? 0;
+      final isCompleted = contractGroup['isCompleted'] ?? false;
+      final isPublic = contractGroup['isPublic'] ?? false;
+      final creator = contractGroup['creator'] ?? '';
+      final createdAt = contractGroup['createdAt'];
+      final endTime = contractGroup['endTime'];
+
+      print(
+          '🔍 Raw values - Target: $targetAmount, Current: $currentAmount, Title: "$title", Completed: $isCompleted');
+
+      // Calculate progress percentage
+      final progressPercentage = targetAmount > 0 
+          ? (currentAmount / targetAmount * 100).clamp(0.0, 100.0) 
+          : 0.0;
+
+      // Calculate amount remaining
+      final amountRemaining = (targetAmount - currentAmount).clamp(0.0, double.infinity);
+
+      // Format dates if available
+      String? createdDateString;
+      String? endDateString;
+      
+      if (createdAt != null) {
+        final createdDate = DateTime.fromMillisecondsSinceEpoch(createdAt * 1000);
+        createdDateString = '${createdDate.day}/${createdDate.month}/${createdDate.year}';
+      }
+      
+      if (endTime != null) {
+        final endDate = DateTime.fromMillisecondsSinceEpoch(endTime * 1000);
+        endDateString = '${endDate.day}/${endDate.month}/${endDate.year}';
+      }
+
+      // Determine status
+      String status;
+      if (isCompleted) {
+        status = 'completed';
+      } else if (progressPercentage >= 100.0) {
+        status = 'target_reached';
+      } else {
+        status = 'active';
+      }
+
+      final mappedGroup = {
+        'id': id,
+        'title': title,
+        'description': description,
+        'category': category,
+        'targetAmount': targetAmount,
+        'currentAmount': currentAmount,
+        'memberCount': memberCount,
+        'isCompleted': isCompleted,
+        'isPublic': isPublic,
+        'creator': creator,
+        'status': status,
+        'progressPercentage': progressPercentage,
+        'amountRemaining': amountRemaining,
+        'createdDate': createdDateString,
+        'endDate': endDateString,
+      };
+
+      print('✅ Successfully mapped group: $mappedGroup');
+      return mappedGroup;
+    } catch (e) {
+      print('❌ Error mapping contract group to UI: $e');
+      return null;
+    }
   }
 
   void setOngoingSelected(bool value) {
@@ -168,107 +314,10 @@ class GroupSaveViewModel extends BaseViewModel {
     print('Find more groups tapped');
   }
 
-  // Join a group using contract service
-  Future<void> joinSavingsGroup(String groupId, {String? groupCode}) async {
-    setBusy(true);
-    try {
-      // Convert string groupId to BigInt
-      final groupIdBigInt = BigInt.parse(groupId);
-      final txHash =
-          await _contractService.joinGroupSave(groupId: groupIdBigInt);
-
-      print('Successfully joined group: $txHash');
-      // Refresh data
-      await loadGroupSaveBalance();
-      await loadUserGroups();
-    } catch (e) {
-      print('Error joining group: $e');
-      rethrow; // Re-throw to let UI handle the error
-    } finally {
-      setBusy(false);
-    }
-  }
 
   // Create a new group using contract service
-  Future<void> createGroup({
-    required String name,
-    required String description,
-    required String category,
-    required double targetAmount,
-    required String frequency,
-    required double contributionAmount,
-    required DateTime startDate,
-    required DateTime endDate,
-    required bool isPublic,
-    String? groupCode,
-  }) async {
-    setBusy(true);
-    try {
-      // TODO: Implement contract integration
-      // final groupId = await _contractService.createGroupSave(
-      //   title: name,
-      //   description: description,
-      //   category: category,
-      //   targetAmount: targetAmount,
-      //   frequency: frequency,
-      //   contributionAmount: contributionAmount,
-      //   isPublic: isPublic,
-      // );
-      final groupId = 'mock_group_${DateTime.now().millisecondsSinceEpoch}';
 
-      print('Group created successfully with ID: $groupId');
-      // Refresh data
-      await loadGroupSaveBalance();
-      await loadUserGroups();
-      if (isPublic) {
-        await loadPublicGroups();
-      }
-    } catch (e) {
-      print('Error creating group: $e');
-    } finally {
-      setBusy(false);
-    }
-  }
 
-  // Contribute to a group
-  Future<void> contributeToGroup(String groupId, double amount) async {
-    setBusy(true);
-    try {
-      // Convert string groupId to BigInt
-      final groupIdBigInt = BigInt.parse(groupId);
-      final txHash = await _contractService.contributeToGroupSave(
-        groupId: groupIdBigInt,
-        amount: amount,
-      );
-
-      print('Contribution successful: $txHash');
-      // Refresh data
-      await loadGroupSaveBalance();
-      await loadUserGroups();
-    } catch (e) {
-      print('Error contributing to group: $e');
-      rethrow; // Re-throw to let UI handle the error
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Leave a group
-  // Future<void> leaveGroup(String groupId) async {
-  //   setBusy(true);
-  //   try {
-  //     final txHash = await _contractService.leaveGroupSave(groupId: groupId);
-
-  //     print('Successfully left group: $txHash');
-  //     // Refresh data
-  //     await loadGroupSaveBalance();
-  //     await loadUserGroups();
-  //   } catch (e) {
-  //     print('Error leaving group: $e');
-  //   } finally {
-  //     setBusy(false);
-  //   }
-  // }
 
   void navigateToCreateGroup() async {
     await createGroupSave();
@@ -277,17 +326,17 @@ class GroupSaveViewModel extends BaseViewModel {
   }
 
   // Get group save details
-  Future<Map<String, dynamic>> getGroupSaveDetails(String groupId) async {
-    try {
-      final groupIdBigInt = BigInt.parse(groupId);
-      final groupDetails =
-          await _contractService.getGroupSave(groupId: groupIdBigInt);
-      return groupDetails;
-    } catch (e) {
-      print('Error getting group save details: $e');
-      rethrow;
-    }
-  }
+  // Future<Map<String, dynamic>> getGroupSaveDetails(String groupId) async {
+  //   try {
+  //     final groupIdBigInt = BigInt.parse(groupId);
+  //     final groupDetails =
+  //         await _contractService.getGroupSave(groupId: groupIdBigInt);
+  //     return groupDetails;
+  //   } catch (e) {
+  //     print('Error getting group save details: $e');
+  //     rethrow;
+  //   }
+  // }
 
   void navigateToGroupDetail(Map<String, dynamic> group) {
     _navigationService.navigateToGroupSaveDetailsView(group: group);

@@ -7,6 +7,7 @@ import 'group_save_details_viewmodel.dart';
 
 class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
   final Map<String, dynamic> group;
+  
   const GroupSaveDetailsView({Key? key, required this.group}) : super(key: key);
 
   @override
@@ -15,8 +16,6 @@ class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
     GroupSaveDetailsViewModel viewModel,
     Widget? child,
   ) {
-    // Variables used in the main builder method are handled in _buildGroupHeader
-
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -31,56 +30,283 @@ class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
           onPressed: () => viewModel.navigateBack(),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Group Header Card
-            _buildGroupHeader(context, viewModel),
+      body: viewModel.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : viewModel.errorMessage != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'Error: ${viewModel.errorMessage}',
+                        style: const TextStyle(color: Colors.red),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      ElevatedButton(
+                        onPressed: () => viewModel.loadGroupSaveDetails(),
+                        child: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                )
+              : SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      _buildGroupHeader(context, viewModel),
+                      const SizedBox(height: 16),
+                      _buildLeaderboardAndMembers(context, viewModel),
+                      const SizedBox(height: 16),
+                      _buildActionButtons(context, viewModel),
+                      const SizedBox(height: 16),
+                      _buildGroupDetails(context, viewModel),
+                      const SizedBox(height: 16),
+                      _buildQuickLinks(context, viewModel),
+                      const SizedBox(height: 16),
+                      _buildLatestActivities(context, viewModel),
+                    ],
+                  ),
+                ),
+    );
+  }
 
-            const SizedBox(height: 20),
+  Widget _buildGroupHeader(BuildContext context, GroupSaveDetailsViewModel viewModel) {
+    final groupData = viewModel.groupSaveData ?? group;
+    final groupName = groupData['name'] as String? ?? 'Group Save';
+    final memberCount = groupData['memberCount'] as int? ?? 1;
+    final currentAmount = groupData['currentAmount'] as double? ?? 0.0;
+    final targetAmount = groupData['targetAmount'] as double? ?? 1000.0;
+    final daysLeft = groupData['daysLeft'] as int? ?? 30;
+    final progress = targetAmount > 0 ? (currentAmount / targetAmount) : 0.0;
 
-            // Leaderboard and Members
-            _buildLeaderboardAndMembers(context, viewModel),
-
-            const SizedBox(height: 20),
-
-            // Action Buttons
-            _buildActionButtons(context, viewModel),
-
-            const SizedBox(height: 24),
-
-            // Group Details
-            _buildGroupDetails(context, viewModel),
-
-            const SizedBox(height: 24),
-
-            // Quick Links
-            _buildQuickLinks(context, viewModel),
-
-            const SizedBox(height: 24),
-
-            // Latest Activities
-            _buildLatestActivities(context, viewModel),
-          ],
+    return Container(
+      padding: const EdgeInsets.all(20),
+      margin: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF00C851), Color(0xFF00A843)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF00C851).withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  groupName,
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$memberCount members',
+                  style: GoogleFonts.inter(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Total Saved',
+                      style: GoogleFonts.inter(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      FormatUtils.formatCurrency(currentAmount),
+                      style: GoogleFonts.inter(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '$daysLeft days left',
+                    style: GoogleFonts.inter(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Target: ${FormatUtils.formatCurrency(targetAmount)}',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Progress',
+                    style: GoogleFonts.inter(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  Text(
+                    '${(progress * 100).toStringAsFixed(1)}%',
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.white.withOpacity(0.3),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                minHeight: 6,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildGroupHeader(
-      BuildContext context, GroupSaveDetailsViewModel viewModel) {
-    final memberCount = (group['memberCount'] as int?) ?? 6515;
-    final totalSaved = (group['totalSaved'] as double?) ?? 229200.0;
-    final endDateString = group['endDate'] as String?;
-    final endDate =
-        endDateString != null ? DateTime.tryParse(endDateString) : null;
-    final daysLeft =
-        endDate != null ? endDate.difference(DateTime.now()).inDays : 31;
-    final progress = (group['progress'] as double?) ?? 0.14;
+  Widget _buildLeaderboardAndMembers(BuildContext context, GroupSaveDetailsViewModel viewModel) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildQuickLinkCard(
+              'Leaderboard',
+              Icons.leaderboard,
+              const Color(0xFF00C851),
+              () => viewModel.navigateToLeaderboard(),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _buildQuickLinkCard(
+              'Members',
+              Icons.group,
+              const Color(0xFF2196F3),
+              () => viewModel.navigateToMembers(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context, GroupSaveDetailsViewModel viewModel) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton(
+              onPressed: () => viewModel.showTopUpDialog(),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00C851),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Top Up',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => viewModel.showLeaveGroupDialog(),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'Leave Group',
+                style: GoogleFonts.inter(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupDetails(BuildContext context, GroupSaveDetailsViewModel viewModel) {
+    final groupData = viewModel.groupSaveData ?? group;
+    final frequency = groupData['frequency'] as String? ?? 'Weekly';
+    final contributionAmount = groupData['contributionAmount'] as double? ?? 5000.0;
+    final startDate = groupData['startDate'] as String? ?? '1st Jan 2024';
+    final endDate = groupData['endDate'] as String? ?? '31st Dec 2024';
 
     return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
@@ -96,133 +322,39 @@ class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(
-                  Icons.school,
-                  color: Colors.white,
-                  size: 30,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      group['title'] ?? 'Back to School 2025',
-                      style: GoogleFonts.inter(
-                        color: Colors.black87,
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '${memberCount.toString()}',
-                              style: GoogleFonts.inter(
-                                color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              'Members',
-                              style: GoogleFonts.inter(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(width: 24),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              '\$${(totalSaved / 1000).toStringAsFixed(0)}',
-                              style: GoogleFonts.inter(
-                                color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              'Total Saved',
-                              style: GoogleFonts.inter(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400),
-                            ),
-                          ],
-                        ),
-                        SizedBox(
-                          width: 25,
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '$daysLeft',
-                              style: GoogleFonts.inter(
-                                color: Colors.black87,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            Text(
-                              'Days Left',
-                              style: GoogleFonts.inter(
-                                  color: Colors.grey.shade600,
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w400),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ],
+          Text(
+            'Group Details',
+            style: GoogleFonts.inter(
+              color: Colors.black87,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
           ),
+          const SizedBox(height: 16),
+          _buildDetailRow('Frequency', frequency),
+          const SizedBox(height: 12),
+          _buildDetailRow('Contribution', FormatUtils.formatCurrency(contributionAmount)),
+          const SizedBox(height: 12),
+          _buildDetailRow('Start Date', startDate),
+          const SizedBox(height: 12),
+          _buildDetailRow('End Date', endDate),
         ],
       ),
     );
   }
 
-  Widget _buildHeaderStat({
-    required String label,
-    required String value,
-    bool alignRight = false,
-  }) {
-    return Column(
-      crossAxisAlignment:
-          alignRight ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+  Widget _buildDetailRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
           label,
           style: GoogleFonts.inter(
             color: Colors.grey.shade600,
-            fontSize: 12,
+            fontSize: 14,
             fontWeight: FontWeight.w400,
           ),
         ),
-        const SizedBox(height: 2),
         Text(
           value,
           style: GoogleFonts.inter(
@@ -235,225 +367,10 @@ class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
     );
   }
 
-  Widget _buildLeaderboardAndMembers(
-      BuildContext context, GroupSaveDetailsViewModel viewModel) {
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () => viewModel.navigateToLeaderboard(),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00C851),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Leaderboard',
-                    style: GoogleFonts.inter(
-                      color: Colors.white,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text(
-                    '🔥',
-                    style: TextStyle(fontSize: 16),
-                  ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF8E8E93),
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => viewModel.navigateToMembers(),
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF00C851),
-                  width: 1,
-                ),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    'Members',
-                    style: GoogleFonts.inter(
-                      color: Colors.black,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  const Icon(
-                    Icons.arrow_forward_ios,
-                    color: Color(0xFF8E8E93),
-                    size: 16,
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(
-      BuildContext context, GroupSaveDetailsViewModel viewModel) {
-    return Row(
-      children: [
-        Expanded(
-          child: GestureDetector(
-            onTap: () => viewModel.showTopUpDialog(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF00C851),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Center(
-                child: Text(
-                  'Top Up ⚡️',
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: GestureDetector(
-            onTap: () => viewModel.navigateToHistory(),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A2E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: const Color(0xFF2A2A3E),
-                  width: 1,
-                ),
-              ),
-              child: Text(
-                'History',
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildGroupDetails(
-      BuildContext context, GroupSaveDetailsViewModel viewModel) {
-    final startDateString = group['startDate'] as String?;
-    final startDate =
-        startDateString != null ? DateTime.tryParse(startDateString) : null;
-    final endDateString = group['endDate'] as String?;
-    final endDate =
-        endDateString != null ? DateTime.tryParse(endDateString) : null;
-    final frequency = group['frequency'] as String?;
-    final contributionAmount =
-        (group['contributionAmount'] as double?) ?? 2976.0;
-    final targetPerMember = (group['targetPerMember'] as double?) ?? 250000.0;
-
-    return Column(
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailCard(
-                'Start Date',
-                startDate != null
-                    ? '${startDate.day}${_getOrdinalSuffix(startDate.day)} ${_getMonthName(startDate.month)} ${startDate.year}'
-                    : '15th Jun 2025',
-                Icons.calendar_today,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDetailCard(
-                'Withdrawal Date',
-                endDate != null
-                    ? '${endDate.day}${_getOrdinalSuffix(endDate.day)} ${_getMonthName(endDate.month)} ${endDate.year}'
-                    : '7th Sep 2025',
-                Icons.calendar_month,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailCard(
-                'Frequency',
-                '${FormatUtils.formatCurrency(contributionAmount)} ${frequency?.toLowerCase() ?? 'manually'}',
-                Icons.repeat,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDetailCard(
-                'Target Per Member',
-                '\$${(targetPerMember / 1000).toStringAsFixed(0)}K',
-                Icons.person,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: _buildDetailCard(
-                'Interest Per Annum',
-                '${((group['interestRate'] as double?) ?? 12.0).toStringAsFixed(1)}%',
-                Icons.trending_up,
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: _buildDetailCard(
-                'Days Left',
-                '${endDate != null ? endDate.difference(DateTime.now()).inDays : 31}',
-                Icons.access_time,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildDetailCard(String title, String value, IconData icon) {
+  Widget _buildQuickLinks(BuildContext context, GroupSaveDetailsViewModel viewModel) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -469,208 +386,183 @@ class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            value,
+            'Quick Links',
             style: GoogleFonts.inter(
-              color: Colors.black,
-              fontSize: 16,
+              color: Colors.black87,
+              fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            title,
-            style: GoogleFonts.inter(
-              color: Colors.grey[600],
-              fontSize: 13,
-            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickLinkCard(
+                  'History',
+                  Icons.history,
+                  const Color(0xFF9C27B0),
+                  () => viewModel.navigateToHistory(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickLinkCard(
+                  'Invite',
+                  Icons.person_add,
+                  const Color(0xFFFF9800),
+                  () => viewModel.showInviteDialog(),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildQuickLinkCard(
+                  'Settings',
+                  Icons.settings,
+                  const Color(0xFF607D8B),
+                  () => viewModel.navigateToSettings(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildQuickLinkCard(
+                  'Break',
+                  Icons.warning,
+                  const Color(0xFFF44336),
+                  () => viewModel.showBreakGroupDialog(),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickLinks(
-      BuildContext context, GroupSaveDetailsViewModel viewModel) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Quick Links',
-          style: GoogleFonts.inter(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(height: 16),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
-            children: [
-              SizedBox(
-                width: 140,
-                child: _buildQuickLinkCard(
-                  'Invite Users',
-                  Icons.person_add,
-                  const Color(0xFF00C851),
-                  () => viewModel.navigateToInvite(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 140,
-                child: _buildQuickLinkCard(
-                  'Lock',
-                  Icons.lock,
-                  const Color(0xFF00C851),
-                  () => viewModel.navigateToLock(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 140,
-                child: _buildQuickLinkCard(
-                  'Settings',
-                  Icons.settings,
-                  const Color(0xFF00C851),
-                  () => viewModel.navigateToSettings(),
-                ),
-              ),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 140,
-                child: _buildQuickLinkCard(
-                  'Break',
-                  Icons.pause_circle,
-                  const Color(0xFF00C851),
-                  () => viewModel.navigateToBreak(),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildQuickLinkCard(
-      String title, IconData icon, Color color, VoidCallback onTap) {
+  Widget _buildQuickLinkCard(String title, IconData icon, Color color, VoidCallback onTap) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: color.withOpacity(0.1),
           borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(1, 2),
-            ),
-          ],
+          border: Border.all(color: color.withOpacity(0.2)),
         ),
         child: Column(
           children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 24,
-              ),
+            Icon(
+              icon,
+              color: color,
+              size: 24,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 8),
             Text(
               title,
               style: GoogleFonts.inter(
-                color: Colors.black,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
+                color: color,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
               ),
-            )
+              textAlign: TextAlign.center,
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLatestActivities(
-      BuildContext context, GroupSaveDetailsViewModel viewModel) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildLatestActivities(BuildContext context, GroupSaveDetailsViewModel viewModel) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Latest Activities',
+            style: GoogleFonts.inter(
+              color: Colors.black87,
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _buildActivityItem(
+            'John Doe contributed ₦5,000',
+            '2 hours ago',
+            Icons.add_circle,
+            const Color(0xFF00C851),
+          ),
+          const SizedBox(height: 12),
+          _buildActivityItem(
+            'Jane Smith joined the group',
+            '1 day ago',
+            Icons.person_add,
+            const Color(0xFF2196F3),
+          ),
+          const SizedBox(height: 12),
+          _buildActivityItem(
+            'Mike Johnson contributed ₦3,000',
+            '2 days ago',
+            Icons.add_circle,
+            const Color(0xFF00C851),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActivityItem(String title, String time, IconData icon, Color color) {
+    return Row(
       children: [
-        Text(
-          'Latest Activities',
-          style: GoogleFonts.inter(
-            color: Colors.black,
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(
+            icon,
+            color: color,
+            size: 16,
           ),
         ),
-        const SizedBox(height: 16),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
+        const SizedBox(width: 12),
+        Expanded(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildActivityItem(
-                'Target funded',
-                '4 minutes ago',
-                'N20,000',
-                Icons.account_balance_wallet,
-                const Color(0xFF00C851),
-                showAmount: true,
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: Colors.black87,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              const Divider(color: Color(0xFFEAEAEA), height: 1),
-              _buildActivityItem(
-                'Target funded',
-                '7 minutes ago',
-                'N5,000',
-                Icons.account_balance_wallet,
-                const Color(0xFF00C851),
-                showAmount: true,
-                // showAvatar: true,
-              ),
-              const Divider(color: Color(0xFFEAEAEA), height: 1),
-              _buildActivityItem(
-                'Target funded',
-                '7 minutes ago',
-                'N70,000',
-                Icons.account_balance_wallet,
-                const Color(0xFF00C851),
-                showAmount: true,
-              ),
-              const Divider(color: Color(0xFFEAEAEA), height: 1),
-              _buildActivityItem(
-                'Target funded',
-                '12 minutes ago',
-                'N100,000',
-                Icons.account_balance_wallet,
-                const Color(0xFF00C851),
-                showAmount: true,
-              ),
-              const Divider(color: Color(0xFFEAEAEA), height: 1),
-              _buildActivityItem(
-                'Joined target',
-                '14 minutes ago',
-                'JOINED',
-                Icons.person_add,
-                const Color(0xFF6C5CE7),
+              const SizedBox(height: 2),
+              Text(
+                time,
+                style: GoogleFonts.inter(
+                  color: Colors.grey.shade600,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w400,
+                ),
               ),
             ],
           ),
@@ -679,134 +571,30 @@ class GroupSaveDetailsView extends StackedView<GroupSaveDetailsViewModel> {
     );
   }
 
-  Widget _buildActivityItem(
-    String title,
-    String time,
-    String status,
-    IconData icon,
-    Color color, {
-    bool showAmount = false,
-    bool showAvatar = false,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Row(
-        children: [
-          if (showAvatar)
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(20),
-                image: const DecorationImage(
-                  image: AssetImage('assets/images/avatar.png'),
-                  fit: BoxFit.cover,
-                ),
-              ),
-            )
-          else
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 20,
-              ),
-            ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    color: Colors.black,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                Text(
-                  time,
-                  style: GoogleFonts.inter(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (showAmount)
-            Text(
-              status,
-              style: GoogleFonts.inter(
-                color: color,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                status,
-                style: GoogleFonts.inter(
-                  color: color,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _getOrdinalSuffix(int day) {
-    if (day >= 11 && day <= 13) return 'th';
-    switch (day % 10) {
-      case 1:
-        return 'st';
-      case 2:
-        return 'nd';
-      case 3:
-        return 'rd';
-      default:
-        return 'th';
-    }
-  }
-
-  String _getMonthName(int month) {
-    const months = [
-      '',
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec'
-    ];
-    return months[month];
-  }
 
   @override
   GroupSaveDetailsViewModel viewModelBuilder(
     BuildContext context,
   ) =>
       GroupSaveDetailsViewModel();
+
+  @override
+  void onViewModelReady(GroupSaveDetailsViewModel viewModel) {
+    // Initialize the viewModel with the group ID from the passed group data
+    final groupId = group['id'];
+    if (groupId != null) {
+      if (groupId is BigInt) {
+        viewModel.initialize(groupId);
+      } else if (groupId is int) {
+        viewModel.initialize(BigInt.from(groupId));
+      } else if (groupId is String) {
+        try {
+          viewModel.initialize(BigInt.parse(groupId));
+        } catch (e) {
+          print('Error parsing group ID: $e');
+        }
+      }
+    }
+    super.onViewModelReady(viewModel);
+  }
 }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:stacked/stacked.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 import 'register_viewmodel.dart';
 
 class RegisterView extends StackedView<RegisterViewModel> {

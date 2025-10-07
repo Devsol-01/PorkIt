@@ -1,14 +1,21 @@
 import 'package:flutter/material.dart' hide BoxDecoration, BoxShadow;
+import 'package:flutter/services.dart';
 import 'package:flutter_inset_shadow/flutter_inset_shadow.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:stacked/stacked.dart';
-import 'package:mobile_app/utils/format_utils.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 
 import 'create_private_group_save_viewmodel.dart';
 
 class CreatePrivateGroupSaveView
     extends StackedView<CreatePrivateGroupSaveViewModel> {
-  const CreatePrivateGroupSaveView({super.key});
+  const CreatePrivateGroupSaveView({Key? key}) : super(key: key);
+
+  @override
+  void onViewModelReady(CreatePrivateGroupSaveViewModel viewModel) {
+    viewModel.initializeListeners();
+    super.onViewModelReady(viewModel);
+  }
 
   @override
   CreatePrivateGroupSaveViewModel viewModelBuilder(BuildContext context) =>
@@ -99,22 +106,6 @@ class CreatePrivateGroupSaveView
                         hintText: 'Enter target amount',
                         keyboardType: TextInputType.number,
                         prefixText: '\$',
-                        onChanged: (value) {
-                          final formattedValue = FormatUtils.formatCurrency(
-                            double.tryParse(value
-                                    .replaceAll('\$', '')
-                                    .replaceAll(',', '')) ??
-                                0,
-                          );
-                          if (value != formattedValue) {
-                            viewModel.targetAmountController.value =
-                                TextEditingValue(
-                              text: formattedValue,
-                              selection: TextSelection.collapsed(
-                                  offset: formattedValue.length),
-                            );
-                          }
-                        },
                       ),
 
                       const SizedBox(height: 24),
@@ -169,22 +160,6 @@ class CreatePrivateGroupSaveView
                         keyboardType: TextInputType.number,
                         prefixText: '\$',
                         readOnly: true,
-                        onChanged: (value) {
-                          final formattedValue = FormatUtils.formatCurrency(
-                            double.tryParse(value
-                                    .replaceAll('\$', '')
-                                    .replaceAll(',', '')) ??
-                                0,
-                          );
-                          if (value != formattedValue) {
-                            viewModel.contributionController.value =
-                                TextEditingValue(
-                              text: formattedValue,
-                              selection: TextSelection.collapsed(
-                                  offset: formattedValue.length),
-                            );
-                          }
-                        },
                       ),
 
                       const SizedBox(height: 32),
@@ -342,6 +317,11 @@ Widget _buildTextField({
       controller: controller,
       keyboardType: keyboardType,
       readOnly: readOnly,
+      inputFormatters: keyboardType == TextInputType.number 
+          ? [
+              NumberInputFormatter(maxDecimalPlaces: 2, allowDecimals: true),
+            ]
+          : null,
       style: const TextStyle(
         color: Colors.black,
         fontSize: 16,

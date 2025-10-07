@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_app/utils/format_utils.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 
 class DepositSheet extends StatefulWidget {
   final Function(double amount, String fundSource) onDeposit;
@@ -111,17 +112,10 @@ class _DepositSheetState extends State<DepositSheet> {
             ),
             child: TextField(
               controller: _amountController,
-              onChanged: (value) {
-                // Format the input as the user types with proper cursor preservation
-                _amountController.value = FormatUtils.formatCurrencyInput(
-                  value,
-                  _amountController.selection,
-                );
-              },
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}')),
+                NumberInputFormatter(maxDecimalPlaces: 2, allowDecimals: true),
               ],
               decoration: InputDecoration(
                 //hintText: '0.00',

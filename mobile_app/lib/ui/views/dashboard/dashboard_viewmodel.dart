@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart';
 import 'package:mobile_app/app/app.bottomsheets.dart';
 import 'package:mobile_app/app/app.locator.dart';
 import 'package:mobile_app/services/contract_service.dart';
@@ -184,13 +185,13 @@ class DashboardViewModel extends BaseViewModel {
   }
 
   void setOngoingSelected(bool value) {
-    _isOngoingSelected = value;
-    notifyListeners(); // Notify UI to rebuild
+    // _isOngoingSelected = value;
+    // notifyListeners(); // Notify UI to rebuild
 
-    // Load transactions when Transactions tab is selected
-    if (!value) {
-      loadRecentTransactions();
-    }
+    // // Load transactions when Transactions tab is selected
+    // if (!value) {
+    //   loadRecentTransactions();
+    // }
   }
 
   Future<void> loadUsdcBalance() async {
@@ -371,53 +372,10 @@ class DashboardViewModel extends BaseViewModel {
     }
   }
 
-  /// Load user statistics from contract
-  Future<void> loadUserStats() async {
-    try {
-      // Get real user stats from contract
-      _userStats = {
-        'dayStreak': 7, // TODO: Implement getUserStats in contract
-        'tokensEarned': 150.0, // TODO: Get from contract
-        'totalReturns': 25.5,
-        'achievements': 3
-      };
-      notifyListeners();
-    } catch (e) {
-      print('⚠️ Error loading user stats: $e');
-    }
-  }
-
-  /// Load recent transactions - mock implementation
-  Future<void> loadRecentTransactions() async {
-    try {
-      // Mock transaction data
-      _recentTransactions = [
-        {
-          'type': 'Flexi Save Deposit',
-          'amount': 100.0,
-          'date': DateTime.now().subtract(Duration(hours: 2)),
-          'status': 'Completed'
-        },
-        {
-          'type': 'Lock Save Created',
-          'amount': 500.0,
-          'date': DateTime.now().subtract(Duration(days: 1)),
-          'status': 'Completed'
-        },
-      ];
-      notifyListeners();
-      print('✅ Recent transactions loaded (mock)');
-    } catch (e) {
-      print('⚠️ Error loading recent transactions: $e');
-    }
-  }
-
   /// Refresh all dashboard data
   Future<void> refreshDashboard() async {
     await Future.wait([
       loadBalance(),
-      loadUserStats(),
-      loadRecentTransactions(),
     ]);
   }
 
@@ -787,6 +745,35 @@ class DashboardViewModel extends BaseViewModel {
 
     print('✅ Balance already loaded: $_dashboardBalance');
     return true;
+  }
+
+  /// Get current wallet address for display
+  Future<String?> getCurrentWalletAddress() async {
+    try {
+      return await _walletService.getCurrentWalletAddress();
+    } catch (e) {
+      print('❌ Error getting current wallet address: $e');
+      return null;
+    }
+  }
+
+  String getCurrentUserFirstName() {
+    final user = _authService.currentUser;
+    return user?.firstName ?? 'User';
+  }
+
+  Future<void> copyWalletAddressToClipboard() async {
+    try {
+      final address = await getCurrentWalletAddress();
+      if (address != null) {
+        await Clipboard.setData(ClipboardData(text: address));
+        _showSuccessSnackbar('Wallet address copied to clipboard');
+      } else {
+        _showErrorSnackbar('Failed to get wallet address');
+      }
+    } catch (e) {
+      _showErrorSnackbar('Failed to copy address: $e');
+    }
   }
 
   @override

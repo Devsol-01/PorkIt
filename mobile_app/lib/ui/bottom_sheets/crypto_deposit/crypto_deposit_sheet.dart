@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:stacked/stacked.dart';
 import 'package:stacked_services/stacked_services.dart';
+import 'package:mobile_app/app/app.locator.dart';
+import 'package:mobile_app/services/wallet_service.dart';
 
 import 'crypto_deposit_sheet_model.dart';
 
@@ -23,8 +25,7 @@ class CryptoDepositSheet extends StackedView<CryptoDepositSheetModel> {
     CryptoDepositSheetModel viewModel,
     Widget? child,
   ) {
-    // Example USDC wallet address (replace with yours if needed)
-    const walletAddress = '0x82a6F7d3C19F8cE14eE322cFa2b7D93d48F9D7B1';
+    final walletService = locator<WalletService>();
 
     return Container(
       decoration: BoxDecoration(
@@ -94,12 +95,18 @@ class CryptoDepositSheet extends StackedView<CryptoDepositSheetModel> {
                     ),
                   ],
                 ),
-                child: QrImageView(
-                  data: walletAddress,
-                  version: QrVersions.auto,
-                  size: 150,
-                  backgroundColor: Colors.white,
-                  foregroundColor: Colors.black,
+                child: FutureBuilder<String?>(
+                  future: walletService.getCurrentWalletAddress(),
+                  builder: (context, snapshot) {
+                    final address = snapshot.data ?? 'Loading...';
+                    return QrImageView(
+                      data: address,
+                      version: QrVersions.auto,
+                      size: 150,
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                    );
+                  },
                 ),
               ),
 
@@ -126,46 +133,54 @@ class CryptoDepositSheet extends StackedView<CryptoDepositSheetModel> {
                       ),
                     ),
                     const SizedBox(height: 5),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            walletAddress,
-                            style: GoogleFonts.jetBrainsMono(
-                              fontSize: 13,
-                              color: Colors.black87,
-                              height: 1.4,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        GestureDetector(
-                          onTap: () async {
-                            await Clipboard.setData(
-                              const ClipboardData(text: walletAddress),
-                            );
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Wallet address copied!'),
-                                duration: Duration(seconds: 2),
+                    FutureBuilder<String?>(
+                      future: walletService.getCurrentWalletAddress(),
+                      builder: (context, snapshot) {
+                        final walletAddress = snapshot.data ?? 'Loading...';
+                        return Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                walletAddress,
+                                style: GoogleFonts.jetBrainsMono(
+                                  fontSize: 13,
+                                  color: Colors.black87,
+                                  height: 1.4,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            );
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: const BoxDecoration(
-                              color: Color(0xFF0077FF),
-                              shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.copy,
-                              size: 16,
-                              color: Colors.white,
+                            const SizedBox(width: 12),
+                            GestureDetector(
+                              onTap: () async {
+                                if (walletAddress != 'Loading...') {
+                                  await Clipboard.setData(
+                                    ClipboardData(text: walletAddress),
+                                  );
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Wallet address copied!'),
+                                      duration: Duration(seconds: 2),
+                                    ),
+                                  );
+                                }
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF0077FF),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.copy,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                      ],
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),

@@ -27,6 +27,7 @@ import 'package:mobile_app/ui/bottom_sheets/fiat_method_selection/fiat_method_se
 import 'package:mobile_app/ui/bottom_sheets/card_deposit/card_deposit_sheet.dart';
 import 'package:mobile_app/ui/bottom_sheets/bank_transfer/bank_transfer_sheet.dart';
 import 'package:mobile_app/ui/bottom_sheets/virtual_account/virtual_account_sheet.dart';
+import 'package:mobile_app/ui/bottom_sheets/language_selection/language_selection_sheet.dart';
 import 'package:mobile_app/services/wallet_service.dart';
 import 'package:mobile_app/services/auth_service.dart';
 import 'package:mobile_app/services/token_service.dart';
@@ -36,6 +37,7 @@ import 'package:mobile_app/ui/views/auth/auth_view.dart';
 import 'package:mobile_app/ui/views/register/register_view.dart';
 import 'package:mobile_app/services/api_service.dart';
 import 'package:mobile_app/services/contract_service.dart';
+import 'package:mobile_app/services/localization_service.dart';
 import 'package:mobile_app/ui/views/porket_save/porket_save_view.dart';
 import 'package:mobile_app/ui/views/goal_save/create_goal/create_goal_view.dart';
 import 'package:mobile_app/ui/views/lock_save/create_lock/create_lock_view.dart';
@@ -92,6 +94,7 @@ import 'package:mobile_app/ui/views/lock_save_details/lock_save_details_view.dar
     LazySingleton(classType: SnackbarService),
     LazySingleton(classType: ApiService),
     LazySingleton(classType: ContractService),
+    LazySingleton(classType: LocalizationService),
     LazySingleton(classType: DashboardViewModel),
     LazySingleton(classType: GoalSaveViewModel),
     // @stacked-service
@@ -111,6 +114,7 @@ import 'package:mobile_app/ui/views/lock_save_details/lock_save_details_view.dar
     StackedBottomsheet(classType: CardDepositSheet),
     StackedBottomsheet(classType: BankTransferSheet),
     StackedBottomsheet(classType: VirtualAccountSheet),
+    StackedBottomsheet(classType: LanguageSelectionSheet),
     // @stacked-bottom-sheet
   ],
   dialogs: [

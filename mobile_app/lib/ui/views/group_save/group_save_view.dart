@@ -120,9 +120,11 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
             _buildToggleButtons(context, viewModel),
             const SizedBox(height: 20),
             // Groups List
-            viewModel.currentGroups.isEmpty
-                ? _buildEmptyState()
-                : _buildGroupsList(viewModel),
+            viewModel.isBusy
+                ? _buildLoadingState()
+                : viewModel.currentGroups.isEmpty
+                    ? _buildEmptyState()
+                    : _buildGroupsList(context, viewModel),
           ],
         ),
       ),
@@ -170,7 +172,7 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
               ),
               child: Center(
                 child: Text(
-                  'Live',
+                  'Live (${viewModel.liveGroups.length})',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w500,
@@ -215,7 +217,7 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
               ),
               child: Center(
                 child: Text(
-                  'Completed',
+                  'Completed (${viewModel.completedGroups.length})',
                   style: const TextStyle(
                     fontFamily: 'Inter',
                     fontWeight: FontWeight.w500,
@@ -228,6 +230,17 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(32.0),
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF8A38F5)),
+        ),
+      ),
     );
   }
 
@@ -252,7 +265,7 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
         ),
         const SizedBox(height: 16),
         const Text(
-          'No ongoing Group savings',
+          'No Group Savings Found',
           style: TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -272,229 +285,211 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
     );
   }
 
-  Widget _buildGroupsList(GroupSaveViewModel viewModel) {
+  Widget _buildGroupsList(BuildContext context, GroupSaveViewModel viewModel) {
     return ListView.separated(
       shrinkWrap: true,
-      physics: NeverScrollableScrollPhysics(),
+      physics: const NeverScrollableScrollPhysics(),
       itemCount: viewModel.currentGroups.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      separatorBuilder: (context, index) => const SizedBox(height: 12),
       itemBuilder: (context, index) {
         final group = viewModel.currentGroups[index];
-        return _buildGroupCard(group, viewModel);
+        return _buildGroupCard(context, group, viewModel);
       },
     );
   }
 
-  Widget _buildGroupCard(
-      Map<String, dynamic> group, GroupSaveViewModel viewModel) {
-    // Safely convert BigInt amounts to double (USDC has 6 decimals)
-    final currentAmount = group['current_amount'] is BigInt
-        ? (group['current_amount'] as BigInt).toDouble() / 1000000.0
-        : (group['current_amount'] is double ? group['current_amount'] : 0.0);
-    final targetAmount = group['target_amount'] is BigInt
-        ? (group['target_amount'] as BigInt).toDouble() / 1000000.0
-        : (group['target_amount'] is double ? group['target_amount'] : 0.0);
-    final daysLeft = _calculateDaysLeft(group['end_time'] as int?);
+  Widget _buildGroupCard(BuildContext context, Map<String, dynamic> group,
+      GroupSaveViewModel viewModel) {
+    final title = group['title'] ?? 'Untitled Group';
+    final currentAmount = (group['currentAmount'] ?? 0.0) as double;
+    final targetAmount = (group['targetAmount'] ?? 0.0) as double;
+    final memberCount = group['memberCount'] ?? 0;
+    final progressPercentage = (group['progressPercentage'] ?? 0.0) as double;
+    final status = group['status'] ?? 'active';
+    final isPublic = group['isPublic'] ?? false;
+    final category = group['category'] ?? 'General';
 
-    final membersCount = group['member_count'] ?? 0;
-    final progress =
-        targetAmount > 0 ? (currentAmount / targetAmount).clamp(0.0, 1.0) : 0.0;
-    final groupTitle = group['title'] as String? ?? 'Untitled Group';
-    final category = group['category'] as String? ?? 'General';
+    // Status color
+    Color statusColor;
+    switch (status) {
+      case 'active':
+        statusColor = const Color(0xFF8A38F5);
+        break;
+      case 'target_reached':
+        statusColor = Colors.green;
+        break;
+      case 'completed':
+        statusColor = Colors.grey;
+        break;
+      default:
+        statusColor = const Color(0xFF8A38F5);
+    }
 
     return GestureDetector(
       onTap: () => viewModel.navigateToGroupDetail(group),
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        padding: const EdgeInsets.all(20),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 20,
-              spreadRadius: 2,
-              offset: const Offset(0, 8),
-            ),
             BoxShadow(
               color: Colors.black.withOpacity(0.04),
               blurRadius: 8,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
+              offset: const Offset(0, 2),
             ),
           ],
-          border: Border.all(
-            color: Colors.grey.withOpacity(0.1),
-            width: 1,
-          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header with icon and category
+            // Header row with title and status
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [Colors.blue.shade400, Colors.blue.shade600],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.blue.withOpacity(0.2),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: const Center(
-                    child: Icon(
-                      Icons.group,
-                      color: Colors.white,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Category badge
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          category,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue.shade700,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      // Group title
                       Text(
-                        groupTitle,
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.black87,
-                          height: 1.2,
+                        title,
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black,
                         ),
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            isPublic ? Icons.public : Icons.lock,
+                            size: 14,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isPublic ? 'Public' : 'Private',
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Icon(
+                            Icons.category,
+                            size: 14,
+                            color: Colors.grey[600],
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            category,
+                            style: GoogleFonts.inter(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
+                      ),
                     ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: statusColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    status.replaceAll('_', ' ').toUpperCase(),
+                    style: GoogleFonts.inter(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: statusColor,
+                    ),
                   ),
                 ),
               ],
             ),
 
-            const SizedBox(height: 20),
-
-            // Progress section
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade50,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  // Progress bar
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      backgroundColor: Colors.grey.shade200,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        progress >= 1.0
-                            ? Colors.green.shade500
-                            : Colors.blue.shade500,
-                      ),
-                      minHeight: 8,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  // Progress text
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${(progress * 100).toStringAsFixed(1)}% Complete',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: progress >= 1.0
-                              ? Colors.green.shade700
-                              : Colors.blue.shade700,
-                        ),
-                      ),
-                      Text(
-                        '${FormatUtils.formatCurrency(currentAmount)} / ${FormatUtils.formatCurrency(targetAmount)}',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-
             const SizedBox(height: 16),
 
-            // Stats row
-            Row(
+            // Progress section
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildEnhancedStat(
-                  icon: Icons.people,
-                  label: "Members",
-                  value: membersCount.toString(),
-                  color: Colors.purple,
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      FormatUtils.formatCurrency(currentAmount),
+                      style: GoogleFonts.poppins(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF8A38F5),
+                      ),
+                    ),
+                    Text(
+                      'of ${FormatUtils.formatCurrency(targetAmount)}',
+                      style: GoogleFonts.inter(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 20),
-                _buildEnhancedStat(
-                  icon: Icons.schedule,
-                  label: "Days Left",
-                  value: daysLeft.toString(),
-                  color: Colors.orange,
-                ),
-                const Spacer(),
-                // Status indicator
+                const SizedBox(height: 8),
+                // Progress bar
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  height: 6,
                   decoration: BoxDecoration(
-                    color: progress >= 1.0
-                        ? Colors.green.shade100
-                        : Colors.blue.shade100,
-                    borderRadius: BorderRadius.circular(20),
+                    color: Colors.grey[200],
+                    borderRadius: BorderRadius.circular(3),
                   ),
-                  child: Text(
-                    progress >= 1.0 ? 'Completed' : 'Active',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: progress >= 1.0
-                          ? Colors.green.shade700
-                          : Colors.blue.shade700,
+                  child: FractionallySizedBox(
+                    alignment: Alignment.centerLeft,
+                    widthFactor: (progressPercentage / 100).clamp(0.0, 1.0),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: statusColor,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
                     ),
                   ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '${progressPercentage.toStringAsFixed(1)}% completed',
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.group,
+                          size: 14,
+                          color: Colors.grey[600],
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '$memberCount members',
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -502,91 +497,6 @@ class GroupSaveView extends StackedView<GroupSaveViewModel> {
         ),
       ),
     );
-  }
-
-  Widget _buildPlainStat({
-    required String label,
-    required String value,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: Colors.grey.shade600,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w700,
-            color: Colors.black87,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEnhancedStat({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Row(
-      children: [
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Center(
-            child: Icon(
-              icon,
-              color: color,
-              size: 16,
-            ),
-          ),
-        ),
-        const SizedBox(width: 8),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: Colors.black87,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  int _calculateDaysLeft(int? endTime) {
-    if (endTime == null) return 0;
-    final endDate = DateTime.fromMillisecondsSinceEpoch(endTime * 1000);
-    final now = DateTime.now();
-    final difference = endDate.difference(now).inDays;
-    return difference > 0 ? difference : 0;
   }
 
   Widget _buildPromotedSavingsSection(

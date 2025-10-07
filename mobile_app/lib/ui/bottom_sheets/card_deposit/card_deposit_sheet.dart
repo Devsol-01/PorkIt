@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:stacked/stacked.dart';
 import 'package:stacked_services/stacked_services.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 
 import 'card_deposit_sheet_model.dart';
 
@@ -97,7 +99,10 @@ class CardDepositSheet extends StackedView<CardDepositSheetModel> {
                     ),
                     child: TextField(
                       controller: viewModel.amountController,
-                      keyboardType: TextInputType.number,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: [
+                        NumberInputFormatter(maxDecimalPlaces: 2, allowDecimals: true),
+                      ],
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         color: Colors.black,
@@ -141,6 +146,10 @@ class CardDepositSheet extends StackedView<CardDepositSheetModel> {
                     child: TextField(
                       controller: viewModel.cardNumberController,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        CardNumberInputFormatter(),
+                      ],
                       style: GoogleFonts.inter(
                         fontSize: 16,
                         color: Colors.black,
@@ -192,6 +201,10 @@ class CardDepositSheet extends StackedView<CardDepositSheetModel> {
                               child: TextField(
                                 controller: viewModel.expiryController,
                                 keyboardType: TextInputType.number,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  ExpiryDateInputFormatter(),
+                                ],
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   color: Colors.black,
@@ -237,6 +250,10 @@ class CardDepositSheet extends StackedView<CardDepositSheetModel> {
                                 controller: viewModel.cvvController,
                                 keyboardType: TextInputType.number,
                                 obscureText: true,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(4),
+                                ],
                                 style: GoogleFonts.inter(
                                   fontSize: 16,
                                   color: Colors.black,

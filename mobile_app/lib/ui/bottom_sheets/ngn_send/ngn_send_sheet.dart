@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:stacked/stacked.dart';
 import 'package:stacked_services/stacked_services.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 
 import 'ngn_send_sheet_model.dart';
 
@@ -208,6 +210,10 @@ class NgnSendSheet extends StackedView<NgnSendSheetModel> {
             child: TextField(
               controller: viewModel.accountNumberController,
               keyboardType: TextInputType.number,
+              inputFormatters: [
+                FilteringTextInputFormatter.digitsOnly,
+                LengthLimitingTextInputFormatter(10),
+              ],
               style: GoogleFonts.inter(
                 fontSize: 16,
                 color: Colors.black,
@@ -290,7 +296,10 @@ class NgnSendSheet extends StackedView<NgnSendSheetModel> {
       ),
       child: TextField(
         controller: viewModel.amountController,
-        keyboardType: TextInputType.number,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: [
+          NumberInputFormatter(maxDecimalPlaces: 2, allowDecimals: true),
+        ],
         style: GoogleFonts.inter(
           fontSize: 16,
           color: Colors.black,

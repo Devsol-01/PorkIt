@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart' hide BoxDecoration, BoxShadow;
+import 'package:flutter/services.dart';
 import 'package:flutter_inset_shadow/flutter_inset_shadow.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:mobile_app/extensions/theme_context_extension.dart';
 import 'package:stacked/stacked.dart';
 import 'package:mobile_app/app/app.locator.dart';
 import 'package:mobile_app/ui/views/dashboard/dashboard_viewmodel.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 
 import 'create_goal_viewmodel.dart';
 
 class CreateGoalView extends StackedView<CreateGoalViewModel> {
   const CreateGoalView({super.key});
+
+  @override
+  void onViewModelReady(CreateGoalViewModel viewModel) {
+    viewModel.initializeListeners();
+    super.onViewModelReady(viewModel);
+  }
 
   @override
   Widget builder(
@@ -290,6 +298,11 @@ class CreateGoalView extends StackedView<CreateGoalViewModel> {
           controller: controller,
           keyboardType: keyboardType,
           readOnly: readOnly,
+          inputFormatters: keyboardType == TextInputType.number 
+              ? [
+                  NumberInputFormatter(maxDecimalPlaces: 2, allowDecimals: true),
+                ]
+              : null,
           style: const TextStyle(
             fontSize: 16,
             color: Colors.black,

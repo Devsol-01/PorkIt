@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart' hide BoxDecoration, BoxShadow;
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:stacked/stacked.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -26,7 +27,7 @@ class DashboardView extends StackedView<DashboardViewModel> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Header section
-                _buildHeader(context),
+                _buildHeader(context, viewModel),
                 const SizedBox(height: 24),
 
                 // Balance Card
@@ -58,7 +59,7 @@ class DashboardView extends StackedView<DashboardViewModel> {
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
+  Widget _buildHeader(BuildContext context, DashboardViewModel viewModel) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -90,7 +91,7 @@ class DashboardView extends StackedView<DashboardViewModel> {
                     ),
                   ),
                   TextSpan(
-                    text: 'Uchechukwu',
+                    text: viewModel.getCurrentUserFirstName(),
                     style: GoogleFonts.inter(
                         fontSize: 13,
                         fontWeight: FontWeight.w400,
@@ -174,19 +175,40 @@ class DashboardView extends StackedView<DashboardViewModel> {
                       color: Colors.white,
                     ),
                   ),
-                  Text(
-                    '0xs39C7.....1BDf6',
-                    style: GoogleFonts.inter(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white,
-                    ),
+                  FutureBuilder<String?>(
+                    future: viewModel.getCurrentWalletAddress(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData && snapshot.data != null) {
+                        final address = snapshot.data!;
+                        final shortAddress =
+                            '${address.substring(0, 6)}...${address.substring(address.length - 6)}';
+                        return Text(
+                          shortAddress,
+                          style: GoogleFonts.inter(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: Colors.white,
+                          ),
+                        );
+                      }
+                      return Text(
+                        'Loading...',
+                        style: GoogleFonts.inter(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(width: 8),
-                  Icon(
-                    Icons.copy,
-                    size: 16,
-                    color: Colors.white.withOpacity(0.8),
+                  GestureDetector(
+                    onTap: () => viewModel.copyWalletAddressToClipboard(),
+                    child: Icon(
+                      Icons.copy,
+                      size: 16,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
                   ),
                 ],
               ),
@@ -198,7 +220,7 @@ class DashboardView extends StackedView<DashboardViewModel> {
             child: Row(
               children: [
                 Text(
-                  'USDC Balance',
+                  'Total Balance',
                   style: GoogleFonts.inter(
                     fontSize: 14,
                     fontWeight: FontWeight.w500,

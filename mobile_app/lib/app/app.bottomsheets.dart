@@ -17,6 +17,7 @@ import '../ui/bottom_sheets/deposit/deposit_sheet.dart';
 import '../ui/bottom_sheets/fiat_method_selection/fiat_method_selection_sheet.dart';
 import '../ui/bottom_sheets/fiat_send_selection/fiat_send_selection_sheet.dart';
 import '../ui/bottom_sheets/group_save_selection/group_save_selection_sheet.dart';
+import '../ui/bottom_sheets/language_selection/language_selection_sheet.dart';
 import '../ui/bottom_sheets/ngn_send/ngn_send_sheet.dart';
 import '../ui/bottom_sheets/send/send_sheet.dart';
 import '../ui/bottom_sheets/virtual_account/virtual_account_sheet.dart';
@@ -37,6 +38,7 @@ enum BottomSheetType {
   cardDeposit,
   bankTransfer,
   virtualAccount,
+  languageSelection,
 }
 
 void setupBottomSheetUi() {
@@ -71,6 +73,8 @@ void setupBottomSheetUi() {
         BankTransferSheet(request: request, completer: completer),
     BottomSheetType.virtualAccount: (context, request, completer) =>
         VirtualAccountSheet(request: request, completer: completer),
+    BottomSheetType.languageSelection: (context, request, completer) =>
+        LanguageSelectionSheet(context, request, completer),
   };
 
   bottomsheetService.setCustomSheetBuilders(builders);

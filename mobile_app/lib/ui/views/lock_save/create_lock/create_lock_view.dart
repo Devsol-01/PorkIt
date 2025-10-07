@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart' hide BoxDecoration, BoxShadow;
+import 'package:flutter/services.dart';
 import 'package:flutter_inset_shadow/flutter_inset_shadow.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:stacked/stacked.dart';
 import 'create_lock_viewmodel.dart';
 import 'package:mobile_app/utils/format_utils.dart';
+import 'package:mobile_app/utils/input_formatters.dart';
 
 class CreateLockView extends StackedView<CreateLockViewModel> {
   final Map<String, dynamic> selectedPeriod;
@@ -111,14 +113,17 @@ class CreateLockView extends StackedView<CreateLockViewModel> {
               const SizedBox(height: 12),
               TextField(
                 controller: viewModel.amountController,
-                keyboardType: TextInputType.number,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  NumberInputFormatter(maxDecimalPlaces: 2, allowDecimals: true),
+                ],
                 style: GoogleFonts.inter(
                   fontSize: 16,
                   color: Colors.black,
                 ),
                 decoration: InputDecoration(
                   hintText: 'Enter amount',
-                  //prefixText: '\$',
+                  prefixText: '\$ ',
                   prefixStyle: GoogleFonts.inter(
                     fontSize: 16,
                     color: Colors.black,
@@ -142,13 +147,6 @@ class CreateLockView extends StackedView<CreateLockViewModel> {
                   ),
                 ),
                 onChanged: (value) {
-                  // Format the input as the user types
-                  viewModel.amountController.value = TextEditingValue(
-                    text: FormatUtils.formatCurrency(double.tryParse(
-                            value.replaceAll('\$', '').replaceAll(',', '')) ??
-                        0),
-                    selection: TextSelection.collapsed(offset: value.length),
-                  );
                   viewModel.updateAmount(value);
                 },
               ),

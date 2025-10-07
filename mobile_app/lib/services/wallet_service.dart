@@ -52,8 +52,33 @@ class WalletService {
 
   /// Get current wallet address (properly formatted for Argent compatibility)
   Future<String?> getCurrentWalletAddress() async {
+    // First try to get from loaded wallet info
+    if (_walletInfo != null && _walletInfo!.address.isNotEmpty) {
+      print('📋 Using loaded wallet info address: ${_walletInfo!.address}');
+      return _walletInfo!.address;
+    }
+    
+    // If not in memory, try to load from storage
     final address = await _storage.read(key: _addressKey);
-    return address != null ? _formatAddressTo66Chars(address) : null;
+    if (address != null) {
+      print('📋 Using storage address: $address');
+      return _formatAddressTo66Chars(address);
+    }
+    
+    // Try to load wallet if not available
+    try {
+      print('🔄 Attempting to load wallet...');
+      final walletInfo = await loadWallet();
+      if (walletInfo != null) {
+        print('✅ Wallet loaded, address: ${walletInfo.address}');
+        return walletInfo.address;
+      }
+    } catch (e) {
+      print('❌ Error loading wallet: $e');
+    }
+    
+    print('❌ No wallet address available');
+    return null;
   }
 
   /// Check if wallet exists in storage

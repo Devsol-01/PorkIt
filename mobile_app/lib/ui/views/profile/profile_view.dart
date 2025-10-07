@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart' hide BoxDecoration, BoxShadow;
 import 'package:flutter_inset_shadow/flutter_inset_shadow.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:mobile_app/extensions/theme_context_extension.dart';
-import 'package:mobile_app/ui/common/app_colors.dart';
-import 'package:mobile_app/ui/views/badges/badges_viewmodel.dart';
 import 'package:stacked/stacked.dart';
-import 'package:mobile_app/app/app.router.dart'; // Importing the router
+import 'package:mobile_app/app/app.locator.dart';
+import 'package:mobile_app/l10n/app_localizations.dart';
+import 'package:mobile_app/services/wallet_service.dart';
 
 import 'profile_viewmodel.dart';
 
@@ -31,7 +30,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Profile Header
-                        _buildProfileHeader(context),
+                        _buildProfileHeader(context, viewModel),
                         const SizedBox(height: 32),
 
                         // Statistics Section
@@ -42,7 +41,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
                         _buildWalletAddressSection(context),
                         const SizedBox(height: 24),
 
-                        _buildLanguage(context),
+                        _buildLanguage(context, viewModel),
                         const SizedBox(height: 16),
 
                         _buildContactSection(context),
@@ -53,7 +52,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
                         const SizedBox(height: 16),
 
                         // Log Out Section
-                        _buildLogOutSection(context),
+                        _buildLogOutSection(context, viewModel),
                       ],
                     )),
               ),
@@ -62,7 +61,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
         ));
   }
 
-  Widget _buildProfileHeader(BuildContext context) {
+  Widget _buildProfileHeader(BuildContext context, ProfileViewModel viewModel) {
     return Row(
       children: [
         // Profile Avatar
@@ -82,7 +81,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
           ),
           child: Center(
             child: Text(
-              'US',
+              viewModel.getUserInitials(),
               style: GoogleFonts.inter(
                 color: Colors.white,
                 fontSize: 20,
@@ -99,7 +98,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Uchechukwu Solomon',
+                viewModel.currentUser?.fullName ?? 'Loading...',
                 style: GoogleFonts.inter(
                   color: Colors.black,
                   fontSize: 18,
@@ -108,7 +107,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
                 ),
               ),
               Text(
-                'solomonu928@gmail.com',
+                viewModel.currentUser?.email ?? 'Loading...',
                 style: GoogleFonts.inter(
                   color: Colors.black,
                   fontSize: 14,
@@ -136,7 +135,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Statistics',
+          AppLocalizations.of(context)!.settings,
           style: GoogleFonts.inter(
             fontWeight: FontWeight.w600, // Medium
             fontSize: 16,
@@ -228,7 +227,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
             color: Color.fromRGBO(0, 76, 232, 0.1),
             offset: Offset(0.834033, 0.834033),
             blurRadius: 1.25105,
-            inset: true, // 👈 makes it inset
+            inset: true, //
           ),
         ],
       ),
@@ -279,6 +278,8 @@ class ProfileView extends StackedView<ProfileViewModel> {
   }
 
   Widget _buildWalletAddressSection(BuildContext context) {
+    final walletService = locator<WalletService>();
+
     return Container(
         width: 370,
         height: 87,
@@ -304,60 +305,96 @@ class ProfileView extends StackedView<ProfileViewModel> {
           ),
           const SizedBox(height: 12), // gap between texts
           // Wallet Address Value
-          Text(
-            "Wallet address: 0xs39C7.....1BDf6",
-            style: GoogleFonts.inter(
-              fontWeight: FontWeight.w400,
-              fontSize: 12,
-              height: 15 / 12, // keeps line height identical to Figma
-              color: const Color(0xFF0000A5),
-            ),
+          FutureBuilder<String?>(
+            future: walletService.getCurrentWalletAddress(),
+            builder: (context, snapshot) {
+              if (snapshot.hasData && snapshot.data != null) {
+                final address = snapshot.data!;
+                final shortAddress =
+                    '${address.substring(0, 6)}...${address.substring(address.length - 6)}';
+                return Text(
+                  "Wallet address: $shortAddress",
+                  style: GoogleFonts.inter(
+                    fontWeight: FontWeight.w400,
+                    fontSize: 12,
+                    height: 15 / 12, // keeps line height identical to Figma
+                    color: const Color(0xFF0000A5),
+                  ),
+                );
+              }
+              return Text(
+                "Wallet address: Loading...",
+                style: GoogleFonts.inter(
+                  fontWeight: FontWeight.w400,
+                  fontSize: 12,
+                  height: 15 / 12,
+                  color: const Color(0xFF0000A5),
+                ),
+              );
+            },
           )
         ]));
   }
 
-  Widget _buildLanguage(BuildContext context) {
-    return Container(
-      width: 370,
-      height: 64,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFDADADA), width: 1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left section (icon + text)
-          Row(
-            children: [
-              // Small icon container with inset shadow
-              Icon(
-                Icons.language, // substitute for ShieldCheckered
-                size: 24,
-                color: Colors.black,
-              ),
-              const SizedBox(width: 10),
-              // Label
-              Text(
-                "Language",
-                style: GoogleFonts.inter(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                  height: 17 / 14,
-                  color: const Color(0xFF0D0D0D),
+  Widget _buildLanguage(BuildContext context, ProfileViewModel viewModel) {
+    return GestureDetector(
+      onTap: () => viewModel.showLanguageSelection(),
+      child: Container(
+        width: 370,
+        height: 64,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFDADADA), width: 1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Left section (icon + text)
+            Row(
+              children: [
+                // Small icon container with inset shadow
+                Icon(
+                  Icons.language,
+                  size: 24,
+                  color: Colors.black,
                 ),
-              ),
-            ],
-          ),
-          // Right caret (arrow)
-          const Icon(
-            Icons.chevron_right,
-            size: 24,
-            color: Colors.black,
-          ),
-        ],
+                const SizedBox(width: 10),
+                // Label and current language
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      AppLocalizations.of(context)!.language,
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w500,
+                        fontSize: 14,
+                        height: 17 / 14,
+                        color: const Color(0xFF0D0D0D),
+                      ),
+                    ),
+                    Text(
+                      viewModel.currentLanguageName,
+                      style: GoogleFonts.inter(
+                        fontWeight: FontWeight.w400,
+                        fontSize: 12,
+                        color: const Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            // Right caret (arrow)
+            const Icon(
+              Icons.chevron_right,
+              size: 24,
+              color: Colors.black,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -387,7 +424,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
               const SizedBox(width: 10),
               // Label
               Text(
-                "Contact Us",
+                AppLocalizations.of(context)!.contact,
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
@@ -433,7 +470,7 @@ class ProfileView extends StackedView<ProfileViewModel> {
               const SizedBox(width: 10),
               // Label
               Text(
-                "Privacy",
+                AppLocalizations.of(context)!.privacy,
                 style: GoogleFonts.inter(
                   fontWeight: FontWeight.w500,
                   fontSize: 14,
@@ -454,47 +491,50 @@ class ProfileView extends StackedView<ProfileViewModel> {
     );
   }
 
-  Widget _buildLogOutSection(BuildContext context) {
-    return Container(
-      width: 370,
-      height: 64,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border.all(color: const Color(0xFFDADADA), width: 1),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Left section (icon + text)
-          Row(
-            children: [
-              // Small icon container with inset shadow
-              Icon(
-                Icons.logout, // substitute for ShieldCheckered
-                size: 24,
-                color: Colors.red,
-              ),
-              const SizedBox(width: 10),
-              // Label
-              Text(
-                "Logout",
-                style: GoogleFonts.inter(
-                    fontWeight: FontWeight.w500,
-                    fontSize: 14,
-                    height: 17 / 14,
-                    color: Colors.red),
-              ),
-            ],
-          ),
-          // Right caret (arrow)
-          const Icon(
-            Icons.chevron_right,
-            size: 24,
-            color: Colors.black,
-          ),
-        ],
+  Widget _buildLogOutSection(BuildContext context, ProfileViewModel viewModel) {
+    return GestureDetector(
+      onTap: () => viewModel.logout(),
+      child: Container(
+        width: 370,
+        height: 64,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFDADADA), width: 1),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            // Left section (icon + text)
+            Row(
+              children: [
+                // Small icon container with inset shadow
+                Icon(
+                  Icons.logout, // substitute for ShieldCheckered
+                  size: 24,
+                  color: Colors.red,
+                ),
+                const SizedBox(width: 10),
+                // Label
+                Text(
+                  AppLocalizations.of(context)!.logout,
+                  style: GoogleFonts.inter(
+                      fontWeight: FontWeight.w500,
+                      fontSize: 14,
+                      height: 17 / 14,
+                      color: Colors.red),
+                ),
+              ],
+            ),
+            // Right caret (arrow)
+            const Icon(
+              Icons.chevron_right,
+              size: 24,
+              color: Colors.black,
+            ),
+          ],
+        ),
       ),
     );
   }
