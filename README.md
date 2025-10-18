@@ -124,17 +124,14 @@ flutter test --update-goldens
 ### Smart Contract Tests
 ```bash
 cd contract
-snforge test
-```
+snforge test<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 56" src="https://github.com/user-attachments/assets/b7393cc0-bfe1-4713-8385-3a69cb962249" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 41" src="https://github.com/user-attachments/assets/fe3d7b4d-55d0-402c-8a6d-7a8519948c0c" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 25" src="https://github.com/user-attachments/assets/9ab155a3-3878-4207-ab0c-68e1eca2f922" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 08" src="https://github.com/user-attachments/assets/c11554f1-b338-4164-89d9-c58f2b9f4c94" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 27 45" src="https://github.com/user-attachments/assets/e1246e3a-d840-4a6c-be41-4d149b0b17d3" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 27 45" src="https://github.com/user-attachments/assets/2bea205d-ed11-4ad5-bcab-2d1f228bc1ff" />
 
-# Golden tests (UI regression)
-flutter test --update-goldens
 
-# Integration tests
-flutter test test_app_integration.dart
-```
-
-## 🏆 Hackathon Highlights
 
 ### Innovation
 - **First multi-type savings platform** on Starknet with flexible interest rates
@@ -173,21 +170,3 @@ We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👥 Team
-
-- **Uche Solomon** - Mobile App Developer
-- **Asher Nzurum** - Smart Contract Developer
-- **Nafisah Adekunle** - Product Designer
-
-## 🙏 Acknowledgments
-
-- OpenZeppelin for secure contract templates
-- Starknet Foundation for the amazing ecosystem
-- Flutter team for the excellent cross-platform framework
-
----
-
-**PorketOption** - Making smart finance accessible to everyone! 🐷💸
-
-*Built with ❤️ during the Thebuidlathon 2025*
