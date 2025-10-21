@@ -112,24 +112,12 @@ flutter run
 cd contract
 snforge test
 ```
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 27 45" src="https://github.com/user-attachments/assets/2e6998f8-be30-4a19-b762-80fa4c88383d" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 08" src="https://github.com/user-attachments/assets/bf648c58-7b51-43a0-89c3-b26011f3e9e3" /><img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 25" src="https://github.com/user-attachments/assets/5a5f2614-de5c-413e-9bbc-88e5daee39c4" />
 
-**UI Testing:**
-```bash
-cd mobile_app
-flutter test --update-goldens
-```
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 56" src="https://github.com/user-attachments/assets/816a517b-a251-4800-820d-d87a4ffb676c" />
+<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 41" src="https://github.com/user-attachments/assets/804e2c13-434d-4755-8c66-fd2f847ee87c" />
 
-## 🧪 Testing
-
-### Smart Contract Tests
-```bash
-cd contract
-snforge test<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 56" src="https://github.com/user-attachments/assets/b7393cc0-bfe1-4713-8385-3a69cb962249" />
-<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 41" src="https://github.com/user-attachments/assets/fe3d7b4d-55d0-402c-8a6d-7a8519948c0c" />
-<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 25" src="https://github.com/user-attachments/assets/9ab155a3-3878-4207-ab0c-68e1eca2f922" />
-<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 08" src="https://github.com/user-attachments/assets/c11554f1-b338-4164-89d9-c58f2b9f4c94" />
-<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 27 45" src="https://github.com/user-attachments/assets/e1246e3a-d840-4a6c-be41-4d149b0b17d3" />
-<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 27 45" src="https://github.com/user-attachments/assets/2bea205d-ed11-4ad5-bcab-2d1f228bc1ff" />
 
 
 
@@ -148,14 +136,6 @@ snforge test<img width="400" height="843" alt="Screenshot 2025-10-17 at 23 28 56
 - **Zero learning curve** for traditional banking users
 - **Instant transaction feedback** with real-time updates
 
-## 🔮 Future Roadmap
-
-- [ ] **Cross-chain integration** with multiple L2 solutions
-- [ ] **NFT-based achievements** for savings milestones
-- [ ] **AI-powered savings recommendations**
-- [ ] **In-app investment options** beyond savings
-- [ ] **Multi-language support** for global adoption
-- [ ] **Advanced analytics dashboard** for users
 
 ## 🤝 Contributing
 
